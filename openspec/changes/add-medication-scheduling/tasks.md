@@ -29,14 +29,14 @@
 
 ## 4. Cadastro de medicamentos (conforme `specs/medication-registration`)
 
-- [ ] 4.1 Construir o formulário de cadastro com os campos comuns (nome, dose, criticidade, quantidade em estoque, quantidade por embalagem) e um seletor de tipo de esquema; verificar renderizando o formulário e enviando com cada tipo selecionado.
-- [ ] 4.2 Construir os campos do esquema DIARIO (lista de horários, duração) com validação; verificar que ao menos um horário é exigido.
-- [ ] 4.3 Construir os campos do esquema INTERVALO_HORAS (intervalo em horas, duração) com validação; verificar que valores inválidos/ausentes são rejeitados antes do envio.
-- [ ] 4.4 Construir os campos do esquema DIAS_SEMANA (dias da semana, horários, duração) com validação; verificar que ao menos um dia e um horário são exigidos.
-- [ ] 4.5 Construir os campos do esquema CICLICO (dias ativos, dias de pausa, horário diário) com validação, e forçar a criticidade para especial independentemente do valor selecionado no controle de criticidade; verificar com um teste que enviar cíclico + comum persiste como especial.
-- [ ] 4.6 Construir o campo do esquema SE_NECESSARIO (limite diário) sem campos de horário/duração; verificar que o formulário não exibe campos irrelevantes para esse tipo.
-- [ ] 4.7 Implementar o fluxo de edição: atualizar os campos de um medicamento ou esquema afeta apenas a geração de doses futuras, nunca as linhas de `doses`/histórico já passadas; verificar editando um intervalo e confirmando que as linhas de histórico existentes permanecem inalteradas.
-- [ ] 4.8 Implementar o fluxo de remoção: excluir um medicamento cancela suas notificações pendentes e para a geração de doses futuras, mantendo intactas as linhas de seu histórico; verificar removendo um medicamento com doses pendentes e confirmando que as consultas de histórico ainda retornam seus registros passados.
+- [x] 4.1 Construir o formulário de cadastro com os campos comuns (nome, dose, criticidade, quantidade em estoque, quantidade por embalagem) e um seletor de tipo de esquema; verificar renderizando o formulário e enviando com cada tipo selecionado.
+- [x] 4.2 Construir os campos do esquema DIARIO (lista de horários, duração) com validação; verificar que ao menos um horário é exigido.
+- [x] 4.3 Construir os campos do esquema INTERVALO_HORAS (intervalo em horas, duração) com validação; verificar que valores inválidos/ausentes são rejeitados antes do envio.
+- [x] 4.4 Construir os campos do esquema DIAS_SEMANA (dias da semana, horários, duração) com validação; verificar que ao menos um dia e um horário são exigidos.
+- [x] 4.5 Construir os campos do esquema CICLICO (dias ativos, dias de pausa, horário diário) com validação, e forçar a criticidade para especial independentemente do valor selecionado no controle de criticidade; verificar com um teste que enviar cíclico + comum persiste como especial.
+- [x] 4.6 Construir o campo do esquema SE_NECESSARIO (limite diário) sem campos de horário/duração; verificar que o formulário não exibe campos irrelevantes para esse tipo.
+- [x] 4.7 Implementar o fluxo de edição: atualizar os campos de um medicamento ou esquema afeta apenas a geração de doses futuras, nunca as linhas de `doses`/histórico já passadas; verificar editando um intervalo e confirmando que as linhas de histórico existentes permanecem inalteradas.
+- [x] 4.8 Implementar o fluxo de remoção: excluir um medicamento cancela suas notificações pendentes e para a geração de doses futuras, mantendo intactas as linhas de seu histórico; verificar removendo um medicamento com doses pendentes e confirmando que as consultas de histórico ainda retornam seus registros passados.
 
 ## 5. Notificações (conforme `specs/dose-notifications`)
 

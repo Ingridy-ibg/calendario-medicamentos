@@ -12,8 +12,7 @@ export interface NovaDose {
   numeroNoCiclo?: number | null;
 }
 
-export function inserirDose(db: AppDb, dados: NovaDose) {
-  const agora = new Date();
+export function inserirDose(db: AppDb, dados: NovaDose, agora: Date = new Date()) {
   const registro = {
     id: generateId(),
     esquemaId: dados.esquemaId,

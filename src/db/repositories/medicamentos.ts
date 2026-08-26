@@ -14,8 +14,7 @@ export interface NovoMedicamento {
   notificacoesAtivas?: boolean;
 }
 
-export function inserirMedicamento(db: AppDb, dados: NovoMedicamento) {
-  const agora = new Date();
+export function inserirMedicamento(db: AppDb, dados: NovoMedicamento, agora: Date = new Date()) {
   const registro = {
     id: generateId(),
     nome: dados.nome,
@@ -34,4 +33,23 @@ export function inserirMedicamento(db: AppDb, dados: NovoMedicamento) {
 
 export function buscarMedicamentoPorId(db: AppDb, id: string) {
   return db.select().from(medicamentos).where(eq(medicamentos.id, id)).get();
+}
+
+type PatchMedicamento = Partial<
+  Pick<
+    NovoMedicamento,
+    'nome' | 'dosagem' | 'criticidade' | 'quantidadeEmEstoque' | 'quantidadePorEmbalagem' | 'notificacoesAtivas'
+  >
+>;
+
+export function atualizarMedicamento(db: AppDb, id: string, patch: PatchMedicamento, agora: Date = new Date()) {
+  db.update(medicamentos)
+    .set({ ...patch, updatedAt: agora })
+    .where(eq(medicamentos.id, id))
+    .run();
+  return buscarMedicamentoPorId(db, id);
+}
+
+export function removerMedicamento(db: AppDb, id: string, agora: Date) {
+  db.update(medicamentos).set({ deletedAt: agora, updatedAt: agora }).where(eq(medicamentos.id, id)).run();
 }

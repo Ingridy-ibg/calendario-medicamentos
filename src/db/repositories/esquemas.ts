@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 
+import type { Esquema } from '@/domain/dose-scheduling/types';
 import { generateId } from '@/lib/id';
 
 import { esquemas } from '../schema';
@@ -18,13 +19,18 @@ export type NovoEsquema =
       tipo: 'CICLICO';
       diasAtivos: number;
       diasPausa: number;
-      dataInicioCiclo: Date;
+      /**
+       * `null` = esquema em espera de início (ver design.md, Open Questions):
+       * um medicamento cíclico recém-cadastrado nunca começa "agora mesmo" —
+       * só existe um ciclo ativo quando a primeira dose é confirmada
+       * (`confirmarPrimeiraDoseCiclo`/`confirmarNovaCartelaCiclica`).
+       */
+      dataInicioCiclo: Date | null;
       horarios: string[];
     })
   | (Omit<CamposComuns, 'duracaoDias'> & { tipo: 'SE_NECESSARIO'; limiteDiario: number });
 
-export function inserirEsquema(db: AppDb, dados: NovoEsquema) {
-  const agora = new Date();
+export function inserirEsquema(db: AppDb, dados: NovoEsquema, agora: Date = new Date()) {
   const base = {
     id: generateId(),
     medicamentoId: dados.medicamentoId,
@@ -74,4 +80,97 @@ export function inserirEsquema(db: AppDb, dados: NovoEsquema) {
 
 export function buscarEsquemaPorId(db: AppDb, id: string) {
   return db.select().from(esquemas).where(eq(esquemas.id, id)).get();
+}
+
+export function listarEsquemasPorMedicamento(db: AppDb, medicamentoId: string) {
+  return db.select().from(esquemas).where(eq(esquemas.medicamentoId, medicamentoId)).all();
+}
+
+export type EsquemaRow = NonNullable<ReturnType<typeof buscarEsquemaPorId>>;
+
+type PatchEsquema = Partial<
+  Pick<
+    EsquemaRow,
+    | 'horarios'
+    | 'intervaloHoras'
+    | 'diasDaSemana'
+    | 'diasAtivos'
+    | 'diasPausa'
+    | 'duracaoDias'
+    | 'limiteDiario'
+  >
+>;
+
+/**
+ * Edita os campos de parâmetro de um esquema. Nunca toca `dataInicioCiclo`
+ * (o chamador decide isso separadamente) nem `tipo` — trocar o tipo de
+ * esquema de um medicamento existente não é suportado, é preciso remover e
+ * recadastrar.
+ */
+export function atualizarEsquema(db: AppDb, id: string, patch: PatchEsquema, agora: Date = new Date()) {
+  db.update(esquemas)
+    .set({ ...patch, updatedAt: agora })
+    .where(eq(esquemas.id, id))
+    .run();
+  return buscarEsquemaPorId(db, id);
+}
+
+export function removerEsquema(db: AppDb, id: string, agora: Date) {
+  db.update(esquemas).set({ deletedAt: agora, updatedAt: agora }).where(eq(esquemas.id, id)).run();
+}
+
+/**
+ * Converte uma linha do banco para o tipo de domínio usado pelo motor de
+ * agendamento (`src/domain/dose-scheduling`). `dataInicio` (dia 1 do curso,
+ * usado só para contar duração) é a própria `createdAt` do esquema — ver
+ * decisão em `src/domain/dose-scheduling/types.ts`.
+ */
+export function paraEsquemaDominio(linha: EsquemaRow): Esquema {
+  switch (linha.tipo) {
+    case 'DIARIO':
+      return {
+        id: linha.id,
+        medicamentoId: linha.medicamentoId,
+        tipo: 'DIARIO',
+        horarios: linha.horarios ?? [],
+        duracaoDias: linha.duracaoDias,
+        dataInicio: linha.createdAt,
+      };
+    case 'INTERVALO_HORAS':
+      return {
+        id: linha.id,
+        medicamentoId: linha.medicamentoId,
+        tipo: 'INTERVALO_HORAS',
+        intervaloHoras: linha.intervaloHoras ?? 0,
+        duracaoDias: linha.duracaoDias,
+        dataInicio: linha.createdAt,
+      };
+    case 'DIAS_SEMANA':
+      return {
+        id: linha.id,
+        medicamentoId: linha.medicamentoId,
+        tipo: 'DIAS_SEMANA',
+        diasDaSemana: linha.diasDaSemana ?? [],
+        horarios: linha.horarios ?? [],
+        duracaoDias: linha.duracaoDias,
+        dataInicio: linha.createdAt,
+      };
+    case 'CICLICO':
+      return {
+        id: linha.id,
+        medicamentoId: linha.medicamentoId,
+        tipo: 'CICLICO',
+        diasAtivos: linha.diasAtivos ?? 0,
+        diasPausa: linha.diasPausa ?? 0,
+        horarios: linha.horarios ?? [],
+        dataInicioCiclo: linha.dataInicioCiclo,
+      };
+    case 'SE_NECESSARIO':
+      return {
+        id: linha.id,
+        medicamentoId: linha.medicamentoId,
+        tipo: 'SE_NECESSARIO',
+        limiteDiario: linha.limiteDiario ?? 0,
+      };
+  }
 }
