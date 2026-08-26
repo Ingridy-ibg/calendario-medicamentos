@@ -1,31 +1,31 @@
 ## 1. Setup do projeto e da stack
 
-- [ ] 1.1 Configurar `expo-router` como navegação do projeto; verificar que uma rota de teste renderiza corretamente.
-- [ ] 1.2 Configurar NativeWind para estilo com Tailwind sobre componentes nativos; verificar que uma classe utilitária aplicada a um componente de teste reflete no estilo renderizado.
-- [ ] 1.3 Adicionar Zustand e criar a store inicial de estado de UI (ex: filtros da agenda, estado de formulários em edição); verificar com um teste que a store lê/escreve corretamente.
-- [ ] 1.4 Configurar Vitest para rodar testes do motor de agendamento sem simulador; verificar que `vitest run` executa um teste de exemplo com sucesso.
-- [ ] 1.5 Adicionar `date-fns` e `date-fns-tz`; verificar com um teste que uma operação de soma de horas e uma conversão de fuso produzem o resultado esperado.
+- [x] 1.1 Configurar `expo-router` como navegação do projeto; verificar que uma rota de teste renderiza corretamente.
+- [x] 1.2 Configurar NativeWind para estilo com Tailwind sobre componentes nativos; verificar que uma classe utilitária aplicada a um componente de teste reflete no estilo renderizado.
+- [x] 1.3 Adicionar Zustand e criar a store inicial de estado de UI (ex: filtros da agenda, estado de formulários em edição); verificar com um teste que a store lê/escreve corretamente.
+- [x] 1.4 Configurar Vitest para rodar testes do motor de agendamento sem simulador; verificar que `vitest run` executa um teste de exemplo com sucesso.
+- [x] 1.5 Adicionar `date-fns` e `date-fns-tz`; verificar com um teste que uma operação de soma de horas e uma conversão de fuso produzem o resultado esperado.
 
 ## 2. Camada de dados local (Drizzle + expo-sqlite)
 
-- [ ] 2.1 Adicionar `expo-sqlite` e o Drizzle ORM com seu adaptador, e inicializar a conexão/migração de banco na abertura do app; verificar que o app inicia com o arquivo do banco criado e que uma etapa de migração roda sem erro.
-- [ ] 2.2 Criar a tabela `medicamentos` (id uuid, nome, dosagem, criticidade, quantidadeEmEstoque, quantidadePorEmbalagem, notificacoesAtivas, createdAt, updatedAt, deletedAt); verificar com um teste que uma linha pode ser inserida e lida de volta.
-- [ ] 2.3 Criar a tabela `esquemas` (id uuid, medicamentoId, tipo — DIARIO/INTERVALO_HORAS/DIAS_SEMANA/CICLICO/SE_NECESSARIO —, e as colunas de parâmetros específicas de cada tipo: horários, intervaloHoras, diasDaSemana, diasAtivos, diasPausa, dataInicioCiclo, duracaoDias/contínuo, limiteDiario); verificar com testes que um esquema de cada tipo pode ser inserido e lido com seus parâmetros corretos.
-- [ ] 2.4 Criar a tabela `doses` (id uuid, esquemaId, dataHoraPrevista nullable, status: pendente/aguardando/tomada/tomada com atraso/pulada/perdida, dataHoraRegistro nullable, contador de notificações sem resposta, numeroNoCiclo nullable, createdAt, updatedAt, deletedAt); verificar inserção/leitura/atualização em um teste.
-- [ ] 2.5 Implementar a regra "doses passadas (com dataHoraRegistro preenchido) nunca são sobrescritas pelo motor de agendamento, apenas doses futuras podem ser apagadas e regeneradas"; verificar com um teste de integração que editar um esquema não altera linhas de `doses` já registradas.
+- [x] 2.1 Adicionar `expo-sqlite` e o Drizzle ORM com seu adaptador, e inicializar a conexão/migração de banco na abertura do app; verificar que o app inicia com o arquivo do banco criado e que uma etapa de migração roda sem erro.
+- [x] 2.2 Criar a tabela `medicamentos` (id uuid, nome, dosagem, criticidade, quantidadeEmEstoque, quantidadePorEmbalagem, notificacoesAtivas, createdAt, updatedAt, deletedAt); verificar com um teste que uma linha pode ser inserida e lida de volta.
+- [x] 2.3 Criar a tabela `esquemas` (id uuid, medicamentoId, tipo — DIARIO/INTERVALO_HORAS/DIAS_SEMANA/CICLICO/SE_NECESSARIO —, e as colunas de parâmetros específicas de cada tipo: horários, intervaloHoras, diasDaSemana, diasAtivos, diasPausa, dataInicioCiclo, duracaoDias/contínuo, limiteDiario); verificar com testes que um esquema de cada tipo pode ser inserido e lido com seus parâmetros corretos.
+- [x] 2.4 Criar a tabela `doses` (id uuid, esquemaId, dataHoraPrevista nullable, status: pendente/aguardando/tomada/tomada com atraso/pulada/perdida, dataHoraRegistro nullable, contador de notificações sem resposta, numeroNoCiclo nullable, createdAt, updatedAt, deletedAt); verificar inserção/leitura/atualização em um teste.
+- [x] 2.5 Implementar a regra "doses passadas (com dataHoraRegistro preenchido) nunca são sobrescritas pelo motor de agendamento, apenas doses futuras podem ser apagadas e regeneradas"; verificar com um teste de integração que editar um esquema não altera linhas de `doses` já registradas.
 
 ## 3. Motor de cálculo de doses (funções puras, conforme `specs/dose-scheduling`)
 
-- [ ] 3.1 Implementar `gerarDoses(esquema, de, ate, hoje)` para o tipo DIARIO (horários fixos, independentes entre si); verificar com um teste unitário que confirmar um horário atrasado não desloca os demais horários do dia.
-- [ ] 3.2 Implementar `gerarDoses` para o tipo INTERVALO_HORAS, incluindo a regra de reset pelo horário real de confirmação; verificar com testes unitários para confirmação adiantada e atrasada.
-- [ ] 3.3 Implementar `gerarDoses` para o tipo DIAS_SEMANA (horários fixos aplicados só nos dias configurados); verificar com um teste unitário que dias fora da lista configurada não geram dose.
-- [ ] 3.4 Implementar a regra de pular: marcar uma dose como "pulada" calcula a próxima dose a partir do horário fixo/originalmente previsto, não do horário em que foi pulada; verificar com um teste unitário para DIARIO e para INTERVALO_HORAS.
-- [ ] 3.5 Implementar o corte por duração fixa e a geração contínua para os tipos DIARIO, INTERVALO_HORAS e DIAS_SEMANA; verificar com testes unitários que o dia seguinte ao fim da duração não produz nova dose, e que um esquema contínuo nunca para.
-- [ ] 3.6 Implementar o algoritmo do tipo CICLICO como aritmética modular pura (`calcularStatusDoDia`), incluindo o rastreamento de posição (dia N de M) e o carve-out dos dias de pausa sem dose para confirmar; verificar com testes unitários cobrindo um dia ativo, o último dia ativo, um dia de pausa e a virada de pausa para novo ciclo, incluindo casos de borda (virada de mês, virada de ano, ano bissexto).
-- [ ] 3.7 Implementar o controle de início de ciclo: confirmar a primeira dose de uma nova cartela define uma nova data-âncora de dia 1 e recalcula as janelas de ativo/pausa; verificar com um teste unitário que confirmar após o fim da janela de pausa define uma âncora nova no horário de confirmação, e que sem essa confirmação o esquema permanece em espera.
-- [ ] 3.8 Implementar o tipo SE_NECESSARIO: nenhuma dose é pré-gerada; registrar uma dose grava apenas o horário real, e uma consulta compara o total de doses de hoje contra o limite diário configurado; verificar com testes unitários que nenhuma linha de dose pendente é criada automaticamente e que ultrapassar o limite emite um aviso sem bloquear o registro.
-- [ ] 3.9 Implementar a janela rolante: materializar no banco as doses das próximas 2 a 4 semanas a partir de cada esquema ativo; verificar com um teste de integração que a janela é preenchida corretamente ao criar um esquema e reajustada ao editá-lo.
-- [ ] 3.10 Conectar o motor para que toda resolução de dose (tomei agora / não tomar) grave a próxima linha de dose pendente pela regra correta do tipo de esquema; verificar de ponta a ponta com um teste de integração para cada um dos cinco tipos.
+- [x] 3.1 Implementar `gerarDoses(esquema, de, ate, hoje)` para o tipo DIARIO (horários fixos, independentes entre si); verificar com um teste unitário que confirmar um horário atrasado não desloca os demais horários do dia.
+- [x] 3.2 Implementar `gerarDoses` para o tipo INTERVALO_HORAS, incluindo a regra de reset pelo horário real de confirmação; verificar com testes unitários para confirmação adiantada e atrasada.
+- [x] 3.3 Implementar `gerarDoses` para o tipo DIAS_SEMANA (horários fixos aplicados só nos dias configurados); verificar com um teste unitário que dias fora da lista configurada não geram dose.
+- [x] 3.4 Implementar a regra de pular: marcar uma dose como "pulada" calcula a próxima dose a partir do horário fixo/originalmente previsto, não do horário em que foi pulada; verificar com um teste unitário para DIARIO e para INTERVALO_HORAS.
+- [x] 3.5 Implementar o corte por duração fixa e a geração contínua para os tipos DIARIO, INTERVALO_HORAS e DIAS_SEMANA; verificar com testes unitários que o dia seguinte ao fim da duração não produz nova dose, e que um esquema contínuo nunca para.
+- [x] 3.6 Implementar o algoritmo do tipo CICLICO como aritmética modular pura (`calcularStatusDoDia`), incluindo o rastreamento de posição (dia N de M) e o carve-out dos dias de pausa sem dose para confirmar; verificar com testes unitários cobrindo um dia ativo, o último dia ativo, um dia de pausa e a virada de pausa para novo ciclo, incluindo casos de borda (virada de mês, virada de ano, ano bissexto).
+- [x] 3.7 Implementar o controle de início de ciclo: confirmar a primeira dose de uma nova cartela define uma nova data-âncora de dia 1 e recalcula as janelas de ativo/pausa; verificar com um teste unitário que confirmar após o fim da janela de pausa define uma âncora nova no horário de confirmação, e que sem essa confirmação o esquema permanece em espera.
+- [x] 3.8 Implementar o tipo SE_NECESSARIO: nenhuma dose é pré-gerada; registrar uma dose grava apenas o horário real, e uma consulta compara o total de doses de hoje contra o limite diário configurado; verificar com testes unitários que nenhuma linha de dose pendente é criada automaticamente e que ultrapassar o limite emite um aviso sem bloquear o registro.
+- [x] 3.9 Implementar a janela rolante: materializar no banco as doses das próximas 2 a 4 semanas a partir de cada esquema ativo; verificar com um teste de integração que a janela é preenchida corretamente ao criar um esquema e reajustada ao editá-lo.
+- [x] 3.10 Conectar o motor para que toda resolução de dose (tomei agora / não tomar) grave a próxima linha de dose pendente pela regra correta do tipo de esquema; verificar de ponta a ponta com um teste de integração para cada um dos cinco tipos.
 
 ## 4. Cadastro de medicamentos (conforme `specs/medication-registration`)
 
