@@ -79,6 +79,13 @@ export const doses = sqliteTable('doses', {
   dataHoraRegistro: integer('data_hora_registro', { mode: 'timestamp_ms' }),
   notificacoesSemResposta: integer('notificacoes_sem_resposta').notNull().default(0),
   numeroNoCiclo: integer('numero_no_ciclo'),
+  // Horário em que a próxima notificação desta dose deve disparar (o passo
+  // atual da cascata: disparo inicial, reenvio silencioso ou "adiar" — ver
+  // src/domain/dose-notifications/cascata.ts). Nulo quando não há nada
+  // pendente (dose resolvida, notificações desativadas, ou tipo sem
+  // notificação agendada como SE_NECESSARIO). Não é sobrescrito por edição de
+  // esquema em doses já resolvidas, pela mesma regra 2.5 acima.
+  proximaNotificacaoEm: integer('proxima_notificacao_em', { mode: 'timestamp_ms' }),
 
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),

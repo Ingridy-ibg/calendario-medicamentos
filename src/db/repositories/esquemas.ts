@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import type { Esquema } from '@/domain/dose-scheduling/types';
 import { generateId } from '@/lib/id';
@@ -84,6 +84,20 @@ export function buscarEsquemaPorId(db: AppDb, id: string) {
 
 export function listarEsquemasPorMedicamento(db: AppDb, medicamentoId: string) {
   return db.select().from(esquemas).where(eq(esquemas.medicamentoId, medicamentoId)).all();
+}
+
+/**
+ * Todo esquema cíclico não removido — usado pelo reconciliador de
+ * notificações (src/notifications/contexto.ts) para derivar os lembretes de
+ * dia de pausa, que não têm linha em `doses` e por isso não seriam
+ * descobertos partindo apenas das doses ativas.
+ */
+export function listarEsquemasCiclicos(db: AppDb) {
+  return db
+    .select()
+    .from(esquemas)
+    .where(and(eq(esquemas.tipo, 'CICLICO'), isNull(esquemas.deletedAt)))
+    .all();
 }
 
 export type EsquemaRow = NonNullable<ReturnType<typeof buscarEsquemaPorId>>;

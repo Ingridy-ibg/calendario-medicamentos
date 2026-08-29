@@ -1,9 +1,20 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
 
+import { LIMITE_NOTIFICACOES_COMUM } from '@/domain/dose-notifications/types';
 import { generateId } from '@/lib/id';
 
 import { doses, type StatusDose } from '../schema';
 import type { AppDb } from './types';
+
+/**
+ * Status que ainda não chegaram a um resultado final — o oposto de "dose
+ * passada"/"resolvida" (regra 2.5). Usado em vez de checar `dataHoraRegistro
+ * IS NULL`, porque esse campo representa especificamente o horário real de
+ * confirmação do usuário (specs/adherence-history) e uma dose perdida nunca
+ * teve uma (ver `marcarDosePerdida`) — checar por ele para decidir o que é
+ * "passado" trancaria uma perdida como se fosse futura/editável.
+ */
+const STATUS_NAO_RESOLVIDOS: StatusDose[] = ['pendente', 'aguardando'];
 
 export interface NovaDose {
   esquemaId: string;
@@ -12,6 +23,13 @@ export interface NovaDose {
   numeroNoCiclo?: number | null;
 }
 
+/**
+ * `proximaNotificacaoEm` começa igual a `dataHoraPrevista`: toda dose recém
+ * materializada com horário previsto já nasce com seu disparo inicial
+ * "agendado" do ponto de vista do domínio — cabe à camada de notificações
+ * (src/notifications) decidir se de fato cria o alarme do SO a partir disso
+ * (ver reconciliador em src/domain/dose-notifications).
+ */
 export function inserirDose(db: AppDb, dados: NovaDose, agora: Date = new Date()) {
   const registro = {
     id: generateId(),
@@ -21,6 +39,7 @@ export function inserirDose(db: AppDb, dados: NovaDose, agora: Date = new Date()
     dataHoraRegistro: null as Date | null,
     notificacoesSemResposta: 0,
     numeroNoCiclo: dados.numeroNoCiclo ?? null,
+    proximaNotificacaoEm: dados.dataHoraPrevista ?? null,
     createdAt: agora,
     updatedAt: agora,
     deletedAt: null as Date | null,
@@ -37,27 +56,114 @@ export function listarDosesPorEsquema(db: AppDb, esquemaId: string) {
   return db.select().from(doses).where(eq(doses.esquemaId, esquemaId)).all();
 }
 
+/**
+ * Resolve uma dose para um status final (tomada/tomada com atraso/pulada, e
+ * também perdida — ver `marcarDosePerdida`). Sempre zera `proximaNotificacaoEm`:
+ * uma dose resolvida nunca deve gerar mais notificações.
+ */
 export function resolverDose(
   db: AppDb,
   id: string,
   dados: { status: StatusDose; dataHoraRegistro: Date },
 ) {
   db.update(doses)
-    .set({ status: dados.status, dataHoraRegistro: dados.dataHoraRegistro, updatedAt: new Date() })
+    .set({
+      status: dados.status,
+      dataHoraRegistro: dados.dataHoraRegistro,
+      proximaNotificacaoEm: null,
+      updatedAt: new Date(),
+    })
     .where(eq(doses.id, id))
     .run();
   return buscarDosePorId(db, id);
 }
 
 /**
- * Regra de `design.md`/`adherence-history`: doses passadas (com
- * `dataHoraRegistro` preenchido) nunca são sobrescritas pelo motor de
- * agendamento — apenas doses futuras (ainda não resolvidas) podem ser
- * apagadas e regeneradas quando o esquema é editado.
+ * Uma dose comum perdida nunca foi de fato confirmada pelo usuário — por
+ * isso, ao contrário de `resolverDose`, `dataHoraRegistro` permanece nulo
+ * (specs/adherence-history: "horário real de confirmação, se houver"). O
+ * status `perdida` por si só já é suficiente para travar a dose contra
+ * regeneração pelo motor de agendamento (regra 2.5, ver `STATUS_NAO_RESOLVIDOS`).
+ */
+export function marcarDosePerdida(db: AppDb, id: string, agora: Date) {
+  db.update(doses)
+    .set({ status: 'perdida' as StatusDose, proximaNotificacaoEm: null, updatedAt: agora })
+    .where(eq(doses.id, id))
+    .run();
+  return buscarDosePorId(db, id);
+}
+
+/** Avança o próximo disparo da cascata (reenvio silencioso ou "adiar") sem resolver a dose. */
+export function reagendarProximaNotificacao(
+  db: AppDb,
+  id: string,
+  dados: { proximaNotificacaoEm: Date; notificacoesSemResposta: number },
+) {
+  db.update(doses)
+    .set({
+      proximaNotificacaoEm: dados.proximaNotificacaoEm,
+      notificacoesSemResposta: dados.notificacoesSemResposta,
+      status: 'aguardando' as StatusDose,
+      updatedAt: new Date(),
+    })
+    .where(eq(doses.id, id))
+    .run();
+  return buscarDosePorId(db, id);
+}
+
+/**
+ * Doses ainda ativas (pendentes ou aguardando resposta) com um próximo
+ * disparo de notificação definido — a entrada de dados do reconciliador
+ * (src/domain/dose-notifications/reconciliador.ts). Doses "se necessário"
+ * nunca aparecem aqui, pois nunca têm `proximaNotificacaoEm`.
+ */
+export function listarDosesAtivasComNotificacaoPendente(db: AppDb) {
+  return db
+    .select()
+    .from(doses)
+    .where(
+      and(
+        isNull(doses.deletedAt),
+        inArray(doses.status, STATUS_NAO_RESOLVIDOS),
+        isNotNull(doses.proximaNotificacaoEm),
+      ),
+    )
+    .all();
+}
+
+/**
+ * Candidatas comuns ao prazo de silêncio esgotado (`prazoDeSilencioExpirou`)
+ * — já atingiram as 4 notificações e o prazo da última já passou. A
+ * varredura preguiçosa (`fecharDosesVencidas`) ainda confere a criticidade
+ * via join com `medicamentos`, já que um especial pode acumular contador
+ * alto sem nunca ser candidato (ver `precisaDeProximoAlarme`).
+ */
+export function listarDosesAguardandoVencidas(db: AppDb, agora: Date) {
+  return db
+    .select()
+    .from(doses)
+    .where(
+      and(
+        eq(doses.status, 'aguardando' as StatusDose),
+        isNull(doses.deletedAt),
+        isNotNull(doses.proximaNotificacaoEm),
+        lte(doses.proximaNotificacaoEm, agora),
+        gte(doses.notificacoesSemResposta, LIMITE_NOTIFICACOES_COMUM),
+      ),
+    )
+    .all();
+}
+
+/**
+ * Regra de `design.md`/`adherence-history`: doses passadas (resolvidas —
+ * tomada, tomada com atraso, pulada ou perdida) nunca são sobrescritas pelo
+ * motor de agendamento — apenas doses futuras (ainda pendentes ou
+ * aguardando resposta) podem ser apagadas e regeneradas quando o esquema é
+ * editado.
  */
 export function substituirDosesFuturas(db: AppDb, esquemaId: string, novasDoses: NovaDose[]) {
   db.delete(doses)
-    .where(and(eq(doses.esquemaId, esquemaId), isNull(doses.dataHoraRegistro)))
+    .where(and(eq(doses.esquemaId, esquemaId), inArray(doses.status, STATUS_NAO_RESOLVIDOS)))
     .run();
 
   return novasDoses.map((dose) => inserirDose(db, dose));

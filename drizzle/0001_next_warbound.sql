@@ -1,0 +1,1 @@
+ALTER TABLE `doses` ADD `proxima_notificacao_em` integer;
