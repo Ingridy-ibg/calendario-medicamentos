@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb, type TestDb } from '@/db/create-test-db';
 import { buscarDosePorId, inserirDose, listarDosesPorEsquema } from '@/db/repositories/doses';
 import { inserirEsquema } from '@/db/repositories/esquemas';
-import { inserirMedicamento } from '@/db/repositories/medicamentos';
+import { buscarMedicamentoPorId, inserirMedicamento } from '@/db/repositories/medicamentos';
 
 import { materializarJanela } from './janela-rolante';
 import { confirmarNovaCartelaCiclica, resolverDoseEAgendarProxima } from './resolucao';
@@ -130,6 +130,8 @@ describe('resolverDoseEAgendarProxima — de ponta a ponta para cada tipo de esq
     expect(doseDeHoje?.dataHoraRegistro).toEqual(agora);
     // As doses dos próximos dias ativos já foram materializadas junto.
     expect(dosesGeradas.length).toBeGreaterThan(1);
+    // Confirmar a primeira dose da cartela decrementa o estoque (specs/medication-stock).
+    expect(buscarMedicamentoPorId(db, medicamentoId)?.quantidadeEmEstoque).toBe(99);
   });
 
   it('SE_NECESSARIO: cada registro é uma dose direta, sem linha pendente prévia para resolver', () => {

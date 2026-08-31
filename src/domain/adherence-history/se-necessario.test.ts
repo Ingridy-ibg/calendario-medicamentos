@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb, type TestDb } from '@/db/create-test-db';
 import { listarDosesPorEsquema } from '@/db/repositories/doses';
 import { inserirEsquema } from '@/db/repositories/esquemas';
-import { inserirMedicamento } from '@/db/repositories/medicamentos';
+import { buscarMedicamentoPorId, inserirMedicamento } from '@/db/repositories/medicamentos';
 import type { EsquemaSeNecessario } from '@/domain/dose-scheduling/types';
 
 import { registrarDoseSeNecessarioNoBanco } from './se-necessario';
@@ -64,5 +64,12 @@ describe('registrarDoseSeNecessarioNoBanco', () => {
     const esquema = criarEsquema(db, 1);
     const { dose } = registrarDoseSeNecessarioNoBanco(db, esquema, new Date(2026, 0, 10, 8, 0));
     expect(dose.status).toBe('tomada');
+  });
+
+  it('decrementa o estoque do medicamento em uma unidade a cada registro (specs/medication-stock)', () => {
+    const esquema = criarEsquema(db, 4);
+    registrarDoseSeNecessarioNoBanco(db, esquema, new Date(2026, 0, 10, 8, 0));
+    registrarDoseSeNecessarioNoBanco(db, esquema, new Date(2026, 0, 10, 14, 0));
+    expect(buscarMedicamentoPorId(db, esquema.medicamentoId)?.quantidadeEmEstoque).toBe(18);
   });
 });

@@ -1,5 +1,6 @@
 import { inserirDose, resolverDose } from '@/db/repositories/doses';
 import type { AppDb } from '@/db/repositories/types';
+import { decrementarEstoque } from '@/domain/medication-stock/estoque';
 
 import { confirmarPrimeiraDoseCiclo } from './ciclico';
 import { gerarProximaDoseIntervalo } from './intervalo-horas';
@@ -49,7 +50,8 @@ export function resolverDoseEAgendarProxima(db: AppDb, esquema: Esquema, doseId:
  * Fluxo específico de CICLICO para confirmar a primeira dose de uma nova
  * cartela: define a nova âncora de dia 1, materializa a janela futura a
  * partir dela (que passa a incluir a dose de hoje) e resolve essa dose como
- * tomada.
+ * tomada — decrementando o estoque em uma unidade (specs/medication-stock),
+ * como qualquer outra dose confirmada.
  */
 export function confirmarNovaCartelaCiclica(db: AppDb, esquema: EsquemaCiclico, agora: Date) {
   const novoEsquema = confirmarPrimeiraDoseCiclo(esquema, agora);
@@ -58,6 +60,7 @@ export function confirmarNovaCartelaCiclica(db: AppDb, esquema: EsquemaCiclico, 
   const primeiraDose = dosesInseridas.find((dose) => dose.numeroNoCiclo === 1);
   if (primeiraDose) {
     resolverDose(db, primeiraDose.id, { status: 'tomada', dataHoraRegistro: agora });
+    decrementarEstoque(db, novoEsquema.medicamentoId, agora);
   }
 
   return novoEsquema;

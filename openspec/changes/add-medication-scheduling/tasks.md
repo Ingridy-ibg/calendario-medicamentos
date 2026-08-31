@@ -62,9 +62,9 @@
 
 ## 7. Controle de estoque (conforme `specs/medication-stock`)
 
-- [ ] 7.1 Implementar o decremento automático do estoque em uma unidade ao confirmar uma dose como tomada; verificar com um teste unitário.
-- [ ] 7.2 Implementar a reposição manual de estoque (somar uma quantidade informada ao estoque atual); verificar com um teste unitário.
-- [ ] 7.3 Implementar o alerta de recompra quando o estoque cair abaixo da quantidade de uma embalagem, e sua remoção quando o estoque for reposto; verificar com testes unitários cobrindo a ativação e a remoção do alerta.
+- [x] 7.1 Implementar o decremento automático do estoque em uma unidade ao confirmar uma dose como tomada; verificar com um teste unitário.
+- [x] 7.2 Implementar a reposição manual de estoque (somar uma quantidade informada ao estoque atual); verificar com um teste unitário.
+- [x] 7.3 Implementar o alerta de recompra quando o estoque cair abaixo da quantidade de uma embalagem, e sua remoção quando o estoque for reposto; verificar com testes unitários cobrindo a ativação e a remoção do alerta.
 
 ## 8. Telas de agenda (conforme `specs/agenda-views`)
 

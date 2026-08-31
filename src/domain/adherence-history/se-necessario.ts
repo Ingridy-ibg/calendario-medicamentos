@@ -4,6 +4,7 @@ import { contarDosesRegistradasNoIntervalo, inserirDose, resolverDose } from '@/
 import type { AppDb } from '@/db/repositories/types';
 import { registrarDoseSeNecessario } from '@/domain/dose-scheduling/se-necessario';
 import type { EsquemaSeNecessario } from '@/domain/dose-scheduling/types';
+import { decrementarEstoque } from '@/domain/medication-stock/estoque';
 
 export interface RegistroDoseSeNecessario {
   dose: NonNullable<ReturnType<typeof resolverDose>>;
@@ -33,6 +34,7 @@ export function registrarDoseSeNecessarioNoBanco(
 
   const inserida = inserirDose(db, { esquemaId: esquema.id }, agora);
   const dose = resolverDose(db, inserida.id, { status: 'tomada', dataHoraRegistro: agora });
+  decrementarEstoque(db, esquema.medicamentoId, agora);
 
   return { dose: dose!, avisoLimiteExcedido: aviso.avisoLimiteExcedido };
 }
