@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  adiarNotificacao,
-  classificarResposta,
-  decidirAposEntrega,
-  prazoDeSilencioExpirou,
-  precisaDeProximoAlarme,
-} from './cascata';
+import { adiarNotificacao, decidirAposEntrega, prazoDeSilencioExpirou, precisaDeProximoAlarme } from './cascata';
 
 const T = (h: number, m: number) => new Date(2026, 0, 10, h, m);
 
@@ -51,18 +45,6 @@ describe('adiarNotificacao', () => {
       contador = adiarNotificacao(contador, T(8, 0)).notificacoesSemResposta;
     }
     expect(contador).toBe(3);
-  });
-});
-
-describe('classificarResposta', () => {
-  it('tomada quando confirmada antes de qualquer reenvio (0 ou 1 notificação entregue)', () => {
-    expect(classificarResposta(0)).toBe('tomada');
-    expect(classificarResposta(1)).toBe('tomada');
-  });
-
-  it('tomada com atraso quando confirmada depois de ao menos um reenvio já ter disparado', () => {
-    expect(classificarResposta(2)).toBe('tomada_com_atraso');
-    expect(classificarResposta(4)).toBe('tomada_com_atraso');
   });
 });
 

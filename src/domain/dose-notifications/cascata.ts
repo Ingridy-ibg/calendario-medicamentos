@@ -71,17 +71,6 @@ export function adiarNotificacao(notificacoesSemResposta: number, agora: Date): 
   };
 }
 
-export type ClassificacaoResposta = 'tomada' | 'tomada_com_atraso';
-
-/**
- * Classifica uma resposta positiva ("tomei agora") conforme
- * specs/adherence-history: tomada com atraso se pelo menos uma notificação de
- * reenvio (a 2ª notificação em diante) já tiver disparado antes da resposta.
- */
-export function classificarResposta(notificacoesSemResposta: number): ClassificacaoResposta {
-  return notificacoesSemResposta >= 2 ? 'tomada_com_atraso' : 'tomada';
-}
-
 /**
  * Verdadeiro quando uma dose comum "aguardando" já passou do prazo da sua
  * última notificação sem ter sido resolvida, e essa notificação já era a 4ª

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, notInArray } from 'drizzle-orm';
 
 import { LIMITE_NOTIFICACOES_COMUM } from '@/domain/dose-notifications/types';
 import { generateId } from '@/lib/id';
@@ -14,7 +14,7 @@ import type { AppDb } from './types';
  * teve uma (ver `marcarDosePerdida`) — checar por ele para decidir o que é
  * "passado" trancaria uma perdida como se fosse futura/editável.
  */
-const STATUS_NAO_RESOLVIDOS: StatusDose[] = ['pendente', 'aguardando'];
+export const STATUS_NAO_RESOLVIDOS: StatusDose[] = ['pendente', 'aguardando'];
 
 export interface NovaDose {
   esquemaId: string;
@@ -152,6 +152,48 @@ export function listarDosesAguardandoVencidas(db: AppDb, agora: Date) {
       ),
     )
     .all();
+}
+
+/**
+ * Todas as doses já resolvidas de um esquema (tomada, tomada com atraso,
+ * pulada ou perdida) — a base da consulta de histórico
+ * (src/domain/adherence-history/consulta.ts). Deliberadamente não filtra por
+ * `deletedAt` de nada além da própria dose: o histórico sobrevive à remoção
+ * do medicamento/esquema (specs/adherence-history).
+ */
+export function listarDosesResolvidasPorEsquema(db: AppDb, esquemaId: string) {
+  return db
+    .select()
+    .from(doses)
+    .where(and(eq(doses.esquemaId, esquemaId), isNull(doses.deletedAt), notInArray(doses.status, STATUS_NAO_RESOLVIDOS)))
+    .all();
+}
+
+/**
+ * Quantas doses de um esquema "se necessário" já foram registradas dentro de
+ * `[inicioDoDia, fimDoDia)` — a entrada do limite diário (specs/dose-scheduling,
+ * `registrarDoseSeNecessario`). Usa `dataHoraRegistro`, já que esse tipo nunca
+ * tem `dataHoraPrevista`.
+ */
+export function contarDosesRegistradasNoIntervalo(
+  db: AppDb,
+  esquemaId: string,
+  inicioDoDia: Date,
+  fimDoDia: Date,
+) {
+  return db
+    .select()
+    .from(doses)
+    .where(
+      and(
+        eq(doses.esquemaId, esquemaId),
+        isNull(doses.deletedAt),
+        isNotNull(doses.dataHoraRegistro),
+        gte(doses.dataHoraRegistro, inicioDoDia),
+        lt(doses.dataHoraRegistro, fimDoDia),
+      ),
+    )
+    .all().length;
 }
 
 /**

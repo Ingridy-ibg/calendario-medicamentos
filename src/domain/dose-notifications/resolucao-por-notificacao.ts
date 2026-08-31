@@ -1,17 +1,10 @@
 import { buscarEsquemaPorId } from '@/db/repositories/esquemas';
-import {
-  buscarDosePorId,
-  listarDosesAguardandoVencidas,
-  marcarDosePerdida,
-  reagendarProximaNotificacao,
-} from '@/db/repositories/doses';
+import { buscarDosePorId, listarDosesAguardandoVencidas, marcarDosePerdida, reagendarProximaNotificacao } from '@/db/repositories/doses';
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { Criticidade } from '@/db/schema';
-import { resolverDoseEAgendarProxima } from '@/domain/dose-scheduling/resolucao';
-import type { Esquema } from '@/domain/dose-scheduling/types';
 
-import { adiarNotificacao, classificarResposta, decidirAposEntrega } from './cascata';
+import { adiarNotificacao, decidirAposEntrega } from './cascata';
 import type { DecisaoEntrega } from './cascata';
 
 function exigirDose(db: AppDb, doseId: string) {
@@ -20,18 +13,6 @@ function exigirDose(db: AppDb, doseId: string) {
     throw new Error(`Dose ${doseId} não encontrada`);
   }
   return dose;
-}
-
-/** Ação "tomei agora": classifica tomada/tomada com atraso conforme quantas notificações já foram entregues. */
-export function confirmarDoseViaNotificacao(db: AppDb, esquema: Esquema, doseId: string, agora: Date) {
-  const dose = exigirDose(db, doseId);
-  const status = classificarResposta(dose.notificacoesSemResposta);
-  return resolverDoseEAgendarProxima(db, esquema, doseId, { status, dataHoraRegistro: agora });
-}
-
-/** Ação "não tomar" — só existe para medicamentos comuns (ver `acoesDisponiveis`). */
-export function pularDoseViaNotificacao(db: AppDb, esquema: Esquema, doseId: string, agora: Date) {
-  return resolverDoseEAgendarProxima(db, esquema, doseId, { status: 'pulada', dataHoraRegistro: agora });
 }
 
 /**

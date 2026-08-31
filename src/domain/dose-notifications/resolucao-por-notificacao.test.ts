@@ -5,15 +5,10 @@ import { buscarDosePorId, inserirDose } from '@/db/repositories/doses';
 import { inserirEsquema } from '@/db/repositories/esquemas';
 import { inserirMedicamento } from '@/db/repositories/medicamentos';
 import type { Criticidade } from '@/db/schema';
+import { confirmarDose } from '@/domain/adherence-history/resolucao';
 import type { EsquemaDiario } from '@/domain/dose-scheduling/types';
 
-import {
-  adiarDoseViaNotificacao,
-  confirmarDoseViaNotificacao,
-  fecharDosesVencidas,
-  pularDoseViaNotificacao,
-  registrarEntregaDeNotificacao,
-} from './resolucao-por-notificacao';
+import { adiarDoseViaNotificacao, fecharDosesVencidas, registrarEntregaDeNotificacao } from './resolucao-por-notificacao';
 
 function criarDose(db: TestDb, criticidade: Criticidade = 'comum') {
   const medicamentoId = inserirMedicamento(db, {
@@ -35,28 +30,6 @@ function criarDose(db: TestDb, criticidade: Criticidade = 'comum') {
   const dose = inserirDose(db, { esquemaId, dataHoraPrevista: new Date(2026, 0, 1, 8, 0) });
   return { esquema, dose, criticidade };
 }
-
-describe('confirmarDoseViaNotificacao', () => {
-  let db: TestDb;
-  beforeEach(() => (db = createTestDb()));
-
-  it('classifica como tomada quando confirmada antes de qualquer entrega de reenvio', () => {
-    const { esquema, dose } = criarDose(db);
-    const resolvida = confirmarDoseViaNotificacao(db, esquema, dose.id, new Date(2026, 0, 1, 8, 5));
-    expect(resolvida.status).toBe('tomada');
-    expect(resolvida.proximaNotificacaoEm).toBeNull();
-  });
-
-  it('classifica como tomada com atraso quando confirmada depois da 2ª notificação ter sido entregue', () => {
-    const { esquema, dose } = criarDose(db);
-    registrarEntregaDeNotificacao(db, 'comum', dose.id, new Date(2026, 0, 1, 8, 0)); // notificacoesSemResposta=1
-    registrarEntregaDeNotificacao(db, 'comum', dose.id, new Date(2026, 0, 1, 8, 30)); // notificacoesSemResposta=2
-
-    const resolvida = confirmarDoseViaNotificacao(db, esquema, dose.id, new Date(2026, 0, 1, 8, 45));
-
-    expect(resolvida.status).toBe('tomada_com_atraso');
-  });
-});
 
 describe('registrarEntregaDeNotificacao + fecharDosesVencidas (5.5)', () => {
   let db: TestDb;
@@ -95,7 +68,7 @@ describe('registrarEntregaDeNotificacao + fecharDosesVencidas (5.5)', () => {
     expect(buscarDosePorId(db, dose.id)?.status).toBe('aguardando');
 
     // Uma resposta durante a janela da 4ª ainda é válida (não perdida) —
-    // simulado à parte no teste de `confirmarDoseViaNotificacao`.
+    // simulado à parte em adherence-history/resolucao.test.ts.
 
     const fechadas = fecharDosesVencidas(db, e4.proximaNotificacaoEm);
     expect(fechadas).toEqual([dose.id]);
@@ -114,7 +87,7 @@ describe('registrarEntregaDeNotificacao + fecharDosesVencidas (5.5)', () => {
     registrarEntregaDeNotificacao(db, 'comum', dose.id, new Date(2026, 0, 1, 9, 30));
 
     // Usuário confirma na 4ª notificação, dentro da janela de 30 min dela.
-    confirmarDoseViaNotificacao(db, esquema, dose.id, new Date(2026, 0, 1, 9, 45));
+    confirmarDose(db, esquema, dose.id, new Date(2026, 0, 1, 9, 45));
 
     // A varredura, mesmo rodando bem depois, não encontra mais nada a fechar.
     expect(fecharDosesVencidas(db, new Date(2026, 0, 1, 12, 0))).toEqual([]);
@@ -158,14 +131,5 @@ describe('reenvio infinito do especial (5.7)', () => {
 
     expect(fecharDosesVencidas(db, agora)).toEqual([]);
     expect(buscarDosePorId(db, dose.id)?.status).not.toBe('perdida');
-  });
-});
-
-describe('pularDoseViaNotificacao', () => {
-  it('marca a dose como pulada', () => {
-    const db = createTestDb();
-    const { esquema, dose } = criarDose(db);
-    const resolvida = pularDoseViaNotificacao(db, esquema, dose.id, new Date(2026, 0, 1, 8, 10));
-    expect(resolvida.status).toBe('pulada');
   });
 });

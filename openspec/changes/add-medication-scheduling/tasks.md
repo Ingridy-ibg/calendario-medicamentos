@@ -56,9 +56,9 @@
 
 ## 6. Histórico de adesão (conforme `specs/adherence-history`)
 
-- [ ] 6.1 Implementar a classificação de status na resolução da dose: tomada, tomada com atraso, pulada, perdida; verificar com testes unitários cobrindo cada caminho de classificação.
-- [ ] 6.2 Implementar o registro de doses SE_NECESSARIO sem horário previsto e sem os status atrasada/perdida; verificar com um teste que uma dose se necessário é sempre gravada como tomada, com horário previsto nulo.
-- [ ] 6.3 Implementar uma API de consulta de histórico (por medicamento, por intervalo de datas) lendo as linhas resolvidas de `doses`; verificar com um teste que remover ou editar um medicamento não altera as linhas de histórico já retornadas anteriormente.
+- [x] 6.1 Implementar a classificação de status na resolução da dose: tomada, tomada com atraso, pulada, perdida; verificar com testes unitários cobrindo cada caminho de classificação.
+- [x] 6.2 Implementar o registro de doses SE_NECESSARIO sem horário previsto e sem os status atrasada/perdida; verificar com um teste que uma dose se necessário é sempre gravada como tomada, com horário previsto nulo.
+- [x] 6.3 Implementar uma API de consulta de histórico (por medicamento, por intervalo de datas) lendo as linhas resolvidas de `doses`; verificar com um teste que remover ou editar um medicamento não altera as linhas de histórico já retornadas anteriormente.
 
 ## 7. Controle de estoque (conforme `specs/medication-stock`)
 

@@ -8,13 +8,9 @@ import {
 import * as TaskManager from 'expo-task-manager';
 
 import { db } from '@/db/client';
+import { confirmarDose, pularDose } from '@/domain/adherence-history/resolucao';
 import { analisarIdentificador } from '@/domain/dose-notifications/reconciliador';
-import {
-  adiarDoseViaNotificacao,
-  confirmarDoseViaNotificacao,
-  pularDoseViaNotificacao,
-  registrarEntregaDeNotificacao,
-} from '@/domain/dose-notifications/resolucao-por-notificacao';
+import { adiarDoseViaNotificacao, registrarEntregaDeNotificacao } from '@/domain/dose-notifications/resolucao-por-notificacao';
 import type { AcaoNotificacao } from '@/domain/dose-notifications/types';
 
 import { agendarAlvo, cancelarAlvo } from './agendamento';
@@ -56,11 +52,11 @@ async function processarResposta(response: NotificationResponse) {
 
   switch (response.actionIdentifier) {
     case 'tomei_agora':
-      confirmarDoseViaNotificacao(db, contexto.esquema, doseId, agora);
+      confirmarDose(db, contexto.esquema, doseId, agora);
       await cancelarAlvo(response.notification.request.identifier);
       break;
     case 'nao_tomar':
-      pularDoseViaNotificacao(db, contexto.esquema, doseId, agora);
+      pularDose(db, contexto.esquema, doseId, agora);
       await cancelarAlvo(response.notification.request.identifier);
       break;
     case 'adiar': {
