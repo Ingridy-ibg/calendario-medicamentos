@@ -1,6 +1,7 @@
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { router } from 'expo-router';
 import { type ReactNode, useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -89,17 +90,40 @@ function campoTextoClasse() {
   return 'rounded-lg border border-neutral-300 px-3 py-2 text-black dark:border-neutral-700 dark:text-white';
 }
 
+function formatarHorario(data: Date): string {
+  return `${String(data.getHours()).padStart(2, '0')}:${String(data.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Relógio digital nativo do Android (rolagem de horas/minutos), sempre em formato 24h. */
+function abrirSeletorDeHorario(aoSelecionar: (horario: string) => void) {
+  DateTimePickerAndroid.open({
+    value: new Date(),
+    mode: 'time',
+    is24Hour: true,
+    display: 'spinner',
+    onChange: (evento, data) => {
+      if (evento.type === 'set' && data) {
+        aoSelecionar(formatarHorario(data));
+      }
+    },
+  });
+}
+
 function ListaHorarios({ horarios, onChange }: { horarios: string[]; onChange: (h: string[]) => void }) {
+  function adicionar() {
+    abrirSeletorDeHorario((horario) => {
+      if (horarios.includes(horario)) return;
+      onChange([...horarios, horario].sort());
+    });
+  }
+
   return (
     <View className="gap-2">
       {horarios.map((horario, indice) => (
-        <View key={indice} className="flex-row items-center gap-2">
-          <TextInput
-            className={`flex-1 ${campoTextoClasse()}`}
-            placeholder="08:00"
-            value={horario}
-            onChangeText={(valor) => onChange(horarios.map((h, i) => (i === indice ? valor : h)))}
-          />
+        <View
+          key={horario}
+          className="flex-row items-center justify-between rounded-lg border border-neutral-300 px-3 py-2 dark:border-neutral-700">
+          <ThemedText type="default">{horario}</ThemedText>
           <Pressable onPress={() => onChange(horarios.filter((_, i) => i !== indice))}>
             <ThemedText type="small" themeColor="textSecondary">
               remover
@@ -107,7 +131,9 @@ function ListaHorarios({ horarios, onChange }: { horarios: string[]; onChange: (
           </Pressable>
         </View>
       ))}
-      <Pressable onPress={() => onChange([...horarios, ''])}>
+      <Pressable
+        onPress={adicionar}
+        className="items-center rounded-lg border border-neutral-300 px-3 py-2 dark:border-neutral-700">
         <ThemedText type="link" themeColor="text">
           + adicionar horário
         </ThemedText>
@@ -222,174 +248,176 @@ export default function NovoMedicamentoScreen() {
   return (
     <ThemedView style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView contentContainerClassName="gap-4 p-4" keyboardShouldPersistTaps="handled">
-          <ThemedText type="title" style={{ fontSize: 28, lineHeight: 34 }}>
-            Novo medicamento
-          </ThemedText>
-
-          <Campo rotulo="Nome" erro={erros.nome}>
-            <TextInput className={campoTextoClasse()} value={nome} onChangeText={setNome} placeholder="Losartana" />
-          </Campo>
-
-          <Campo rotulo="Dose" erro={erros.dosagem}>
-            <TextInput
-              className={campoTextoClasse()}
-              value={dosagem}
-              onChangeText={setDosagem}
-              placeholder="50mg"
-            />
-          </Campo>
-
-          <Campo rotulo="Criticidade">
-            <Seletor
-              opcoes={CRITICIDADES}
-              rotulo={(opcao) => (opcao === 'comum' ? 'Comum' : 'Especial')}
-              selecionado={criticidadeEfetiva}
-              onSelecionar={setCriticidade}
-              desabilitado={tipo === 'CICLICO'}
-            />
-            {tipo === 'CICLICO' ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                Medicamentos cíclicos são sempre especiais.
-              </ThemedText>
-            ) : null}
-          </Campo>
-
-          <Campo rotulo="Quantidade em estoque" erro={erros.quantidadeEmEstoque}>
-            <TextInput
-              className={campoTextoClasse()}
-              value={quantidadeEmEstoque}
-              onChangeText={setQuantidadeEmEstoque}
-              keyboardType="numeric"
-              placeholder="30"
-            />
-          </Campo>
-
-          <Campo rotulo="Quantidade por embalagem" erro={erros.quantidadePorEmbalagem}>
-            <TextInput
-              className={campoTextoClasse()}
-              value={quantidadePorEmbalagem}
-              onChangeText={setQuantidadePorEmbalagem}
-              keyboardType="numeric"
-              placeholder="30"
-            />
-          </Campo>
-
-          <Campo rotulo="Tipo de esquema">
-            <Seletor opcoes={TIPOS_ESQUEMA} rotulo={(opcao) => ROTULOS_TIPO[opcao]} selecionado={tipo} onSelecionar={setTipo} />
-          </Campo>
-
-          {tipo === 'DIARIO' ? (
-            <>
-              <Campo rotulo="Horários" erro={erros.horarios}>
-                <ListaHorarios horarios={horarios} onChange={setHorarios} />
-              </Campo>
-              <Campo rotulo="Duração" erro={erros.duracao}>
-                <SeletorDuracao duracao={duracao} onChange={setDuracao} />
-              </Campo>
-            </>
-          ) : null}
-
-          {tipo === 'INTERVALO_HORAS' ? (
-            <>
-              <Campo rotulo="Intervalo entre doses (horas)" erro={erros.intervaloHoras}>
-                <TextInput
-                  className={campoTextoClasse()}
-                  value={intervaloHoras}
-                  onChangeText={setIntervaloHoras}
-                  keyboardType="numeric"
-                  placeholder="8"
-                />
-              </Campo>
-              <Campo rotulo="Duração" erro={erros.duracao}>
-                <SeletorDuracao duracao={duracao} onChange={setDuracao} />
-              </Campo>
-            </>
-          ) : null}
-
-          {tipo === 'DIAS_SEMANA' ? (
-            <>
-              <Campo rotulo="Dias da semana" erro={erros.diasDaSemana}>
-                <View className="flex-row flex-wrap gap-2">
-                  {[0, 1, 2, 3, 4, 5, 6].map((dia) => {
-                    const ativo = diasDaSemana.includes(dia);
-                    return (
-                      <Pressable
-                        key={dia}
-                        onPress={() =>
-                          setDiasDaSemana((atual) =>
-                            ativo ? atual.filter((d) => d !== dia) : [...atual, dia].sort(),
-                          )
-                        }
-                        className={`rounded-full border px-3 py-2 ${
-                          ativo ? 'border-blue-600 bg-blue-600' : 'border-neutral-300 dark:border-neutral-700'
-                        }`}>
-                        <ThemedText type="small" style={ativo ? { color: '#ffffff' } : undefined}>
-                          {ROTULOS_DIA_SEMANA[dia]}
-                        </ThemedText>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </Campo>
-              <Campo rotulo="Horários" erro={erros.horarios}>
-                <ListaHorarios horarios={horarios} onChange={setHorarios} />
-              </Campo>
-              <Campo rotulo="Duração" erro={erros.duracao}>
-                <SeletorDuracao duracao={duracao} onChange={setDuracao} />
-              </Campo>
-            </>
-          ) : null}
-
-          {tipo === 'CICLICO' ? (
-            <>
-              <Campo rotulo="Dias ativos" erro={erros.diasAtivos}>
-                <TextInput
-                  className={campoTextoClasse()}
-                  value={diasAtivos}
-                  onChangeText={setDiasAtivos}
-                  keyboardType="numeric"
-                  placeholder="21"
-                />
-              </Campo>
-              <Campo rotulo="Dias de pausa" erro={erros.diasPausa}>
-                <TextInput
-                  className={campoTextoClasse()}
-                  value={diasPausa}
-                  onChangeText={setDiasPausa}
-                  keyboardType="numeric"
-                  placeholder="7"
-                />
-              </Campo>
-              <Campo rotulo="Horário diário da dose" erro={erros.horario}>
-                <TextInput
-                  className={campoTextoClasse()}
-                  value={horarioCiclico}
-                  onChangeText={setHorarioCiclico}
-                  placeholder="08:00"
-                />
-              </Campo>
-            </>
-          ) : null}
-
-          {tipo === 'SE_NECESSARIO' ? (
-            <Campo rotulo="Limite máximo de doses por dia" erro={erros.limiteDiario}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
+          <ScrollView contentContainerClassName="gap-4 p-4" keyboardShouldPersistTaps="handled">
+            <ThemedText type="title" style={{ fontSize: 28, lineHeight: 34 }}>
+              Novo medicamento
+            </ThemedText>
+  
+            <Campo rotulo="Nome" erro={erros.nome}>
+              <TextInput className={campoTextoClasse()} value={nome} onChangeText={setNome} placeholder="Losartana" />
+            </Campo>
+  
+            <Campo rotulo="Dose" erro={erros.dosagem}>
               <TextInput
                 className={campoTextoClasse()}
-                value={limiteDiario}
-                onChangeText={setLimiteDiario}
-                keyboardType="numeric"
-                placeholder="4"
+                value={dosagem}
+                onChangeText={setDosagem}
+                placeholder="50mg"
               />
             </Campo>
-          ) : null}
-
-          <Pressable onPress={enviar} className="mt-2 items-center rounded-lg bg-blue-600 px-4 py-3">
-            <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
-              Cadastrar
-            </ThemedText>
-          </Pressable>
-        </ScrollView>
+  
+            <Campo rotulo="Criticidade">
+              <Seletor
+                opcoes={CRITICIDADES}
+                rotulo={(opcao) => (opcao === 'comum' ? 'Comum' : 'Especial')}
+                selecionado={criticidadeEfetiva}
+                onSelecionar={setCriticidade}
+                desabilitado={tipo === 'CICLICO'}
+              />
+              {tipo === 'CICLICO' ? (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Medicamentos cíclicos são sempre especiais.
+                </ThemedText>
+              ) : null}
+            </Campo>
+  
+            <Campo rotulo="Quantidade em estoque" erro={erros.quantidadeEmEstoque}>
+              <TextInput
+                className={campoTextoClasse()}
+                value={quantidadeEmEstoque}
+                onChangeText={setQuantidadeEmEstoque}
+                keyboardType="numeric"
+                placeholder="30"
+              />
+            </Campo>
+  
+            <Campo rotulo="Quantidade por embalagem" erro={erros.quantidadePorEmbalagem}>
+              <TextInput
+                className={campoTextoClasse()}
+                value={quantidadePorEmbalagem}
+                onChangeText={setQuantidadePorEmbalagem}
+                keyboardType="numeric"
+                placeholder="30"
+              />
+            </Campo>
+  
+            <Campo rotulo="Tipo de esquema">
+              <Seletor opcoes={TIPOS_ESQUEMA} rotulo={(opcao) => ROTULOS_TIPO[opcao]} selecionado={tipo} onSelecionar={setTipo} />
+            </Campo>
+  
+            {tipo === 'DIARIO' ? (
+              <>
+                <Campo rotulo="Horários" erro={erros.horarios}>
+                  <ListaHorarios horarios={horarios} onChange={setHorarios} />
+                </Campo>
+                <Campo rotulo="Duração" erro={erros.duracao}>
+                  <SeletorDuracao duracao={duracao} onChange={setDuracao} />
+                </Campo>
+              </>
+            ) : null}
+  
+            {tipo === 'INTERVALO_HORAS' ? (
+              <>
+                <Campo rotulo="Intervalo entre doses (horas)" erro={erros.intervaloHoras}>
+                  <TextInput
+                    className={campoTextoClasse()}
+                    value={intervaloHoras}
+                    onChangeText={setIntervaloHoras}
+                    keyboardType="numeric"
+                    placeholder="8"
+                  />
+                </Campo>
+                <Campo rotulo="Duração" erro={erros.duracao}>
+                  <SeletorDuracao duracao={duracao} onChange={setDuracao} />
+                </Campo>
+              </>
+            ) : null}
+  
+            {tipo === 'DIAS_SEMANA' ? (
+              <>
+                <Campo rotulo="Dias da semana" erro={erros.diasDaSemana}>
+                  <View className="flex-row flex-wrap gap-2">
+                    {[0, 1, 2, 3, 4, 5, 6].map((dia) => {
+                      const ativo = diasDaSemana.includes(dia);
+                      return (
+                        <Pressable
+                          key={dia}
+                          onPress={() =>
+                            setDiasDaSemana((atual) =>
+                              ativo ? atual.filter((d) => d !== dia) : [...atual, dia].sort(),
+                            )
+                          }
+                          className={`rounded-full border px-3 py-2 ${
+                            ativo ? 'border-blue-600 bg-blue-600' : 'border-neutral-300 dark:border-neutral-700'
+                          }`}>
+                          <ThemedText type="small" style={ativo ? { color: '#ffffff' } : undefined}>
+                            {ROTULOS_DIA_SEMANA[dia]}
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </Campo>
+                <Campo rotulo="Horários" erro={erros.horarios}>
+                  <ListaHorarios horarios={horarios} onChange={setHorarios} />
+                </Campo>
+                <Campo rotulo="Duração" erro={erros.duracao}>
+                  <SeletorDuracao duracao={duracao} onChange={setDuracao} />
+                </Campo>
+              </>
+            ) : null}
+  
+            {tipo === 'CICLICO' ? (
+              <>
+                <Campo rotulo="Dias ativos" erro={erros.diasAtivos}>
+                  <TextInput
+                    className={campoTextoClasse()}
+                    value={diasAtivos}
+                    onChangeText={setDiasAtivos}
+                    keyboardType="numeric"
+                    placeholder="21"
+                  />
+                </Campo>
+                <Campo rotulo="Dias de pausa" erro={erros.diasPausa}>
+                  <TextInput
+                    className={campoTextoClasse()}
+                    value={diasPausa}
+                    onChangeText={setDiasPausa}
+                    keyboardType="numeric"
+                    placeholder="7"
+                  />
+                </Campo>
+                <Campo rotulo="Horário diário da dose" erro={erros.horario}>
+                  <TextInput
+                    className={campoTextoClasse()}
+                    value={horarioCiclico}
+                    onChangeText={setHorarioCiclico}
+                    placeholder="08:00"
+                  />
+                </Campo>
+              </>
+            ) : null}
+  
+            {tipo === 'SE_NECESSARIO' ? (
+              <Campo rotulo="Limite máximo de doses por dia" erro={erros.limiteDiario}>
+                <TextInput
+                  className={campoTextoClasse()}
+                  value={limiteDiario}
+                  onChangeText={setLimiteDiario}
+                  keyboardType="numeric"
+                  placeholder="4"
+                />
+              </Campo>
+            ) : null}
+  
+            <Pressable onPress={enviar} className="mt-2 items-center rounded-lg bg-blue-600 px-4 py-3">
+              <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
+                Cadastrar
+              </ThemedText>
+            </Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
