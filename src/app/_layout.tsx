@@ -1,11 +1,10 @@
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { Text, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
 import { db } from '@/db/client';
 import { isExpoGo } from '@/lib/expo-go';
 
@@ -13,7 +12,7 @@ import migrations from '../../drizzle/migrations';
 
 SplashScreen.preventAutoHideAsync();
 
-export default function TabLayout() {
+export default function RootLayout() {
   const colorScheme = useColorScheme();
   const { success, error } = useMigrations(db, migrations);
 
@@ -39,7 +38,13 @@ export default function TabLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      <AppTabs />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="medicamento/novo"
+          options={{ presentation: 'modal', headerShown: true, title: 'Novo medicamento' }}
+        />
+      </Stack>
     </ThemeProvider>
   );
 }
