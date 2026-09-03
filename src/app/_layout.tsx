@@ -7,7 +7,7 @@ import { Text, useColorScheme, View } from 'react-native';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import { db } from '@/db/client';
-import { inicializarNotificacoes } from '@/notifications';
+import { isExpoGo } from '@/lib/expo-go';
 
 import migrations from '../../drizzle/migrations';
 
@@ -18,8 +18,10 @@ export default function TabLayout() {
   const { success, error } = useMigrations(db, migrations);
 
   useEffect(() => {
-    if (!success) return;
-    inicializarNotificacoes();
+    if (!success || isExpoGo) return;
+    // Import dinâmico, nunca estático: só de importar `expo-notifications` já
+    // lança uma exceção dentro do Expo Go (ver `lib/expo-go.ts`).
+    import('@/notifications').then(({ inicializarNotificacoes }) => inicializarNotificacoes());
   }, [success]);
 
   if (error) {

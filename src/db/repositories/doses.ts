@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, notInArray } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, notInArray } from 'drizzle-orm';
 
 import { LIMITE_NOTIFICACOES_COMUM } from '@/domain/dose-notifications/types';
 import { generateId } from '@/lib/id';
@@ -54,6 +54,28 @@ export function buscarDosePorId(db: AppDb, id: string) {
 
 export function listarDosesPorEsquema(db: AppDb, esquemaId: string) {
   return db.select().from(doses).where(eq(doses.esquemaId, esquemaId)).all();
+}
+
+/**
+ * Doses com `dataHoraPrevista` dentro de `[inicio, fim)` — a base da agenda
+ * diária (src/domain/agenda-views/agenda-diaria.ts) e do histórico exibido
+ * para dias passados no calendário mensal. Doses "se necessário" nunca têm
+ * `dataHoraPrevista`, então nunca aparecem aqui (ver `agenda-diaria.ts` para
+ * como elas são listadas em vez disso).
+ */
+export function listarDosesDoIntervalo(db: AppDb, inicio: Date, fim: Date) {
+  return db
+    .select()
+    .from(doses)
+    .where(
+      and(
+        isNull(doses.deletedAt),
+        isNotNull(doses.dataHoraPrevista),
+        gte(doses.dataHoraPrevista, inicio),
+        lt(doses.dataHoraPrevista, fim),
+      ),
+    )
+    .all();
 }
 
 /**
@@ -194,6 +216,32 @@ export function contarDosesRegistradasNoIntervalo(
       ),
     )
     .all().length;
+}
+
+/**
+ * A dose ainda não resolvida mais próxima de um esquema — para
+ * INTERVALO_HORAS, que só tem no máximo uma por vez, é literalmente "a
+ * próxima". Usada pelo calendário mensal (src/domain/agenda-views) como
+ * âncora para estimar dias futuros desse tipo, já que seu horário real só é
+ * conhecido dose a dose (ver design.md). Exige `dataHoraPrevista` não nulo —
+ * do contrário, uma dose "se necessário" (que nunca tem horário previsto)
+ * poderia ordenar antes das demais e ser escolhida por engano como "próxima".
+ */
+export function buscarProximaDoseAtiva(db: AppDb, esquemaId: string) {
+  return db
+    .select()
+    .from(doses)
+    .where(
+      and(
+        eq(doses.esquemaId, esquemaId),
+        isNull(doses.deletedAt),
+        isNotNull(doses.dataHoraPrevista),
+        inArray(doses.status, STATUS_NAO_RESOLVIDOS),
+      ),
+    )
+    .orderBy(asc(doses.dataHoraPrevista))
+    .limit(1)
+    .get();
 }
 
 /**

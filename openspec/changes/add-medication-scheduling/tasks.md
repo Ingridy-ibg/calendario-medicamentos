@@ -68,10 +68,10 @@
 
 ## 8. Telas de agenda (conforme `specs/agenda-views`)
 
-- [ ] 8.1 Substituir as telas padrão do starter do Expo (`index`, `explore`) pelo ponto de entrada real de navegação do app para a agenda diária; verificar que o app abre diretamente na agenda diária.
-- [ ] 8.2 Construir a tela de agenda diária listando as doses de hoje com status, a posição no ciclo para medicamentos cíclicos, o progresso do limite diário para medicamentos se necessário (com ação de registrar nova dose), e a sinalização de alerta de estoque; verificar visualmente com dados de teste cobrindo cada tipo de esquema.
-- [ ] 8.3 Excluir da agenda diária os medicamentos de duração fixa já encerrada, mantendo-os consultáveis no histórico; verificar com dados de teste que um curso concluído não aparece hoje mas aparece no histórico.
-- [ ] 8.4 Construir a tela de calendário mensal mostrando histórico registrado para dias passados e horário previsto para dias futuros (definitivo para diário/dias da semana/cíclico, estimado para intervalo em horas, ausente para se necessário); verificar visualmente navegando até um mês passado e um mês futuro com dados de teste.
+- [x] 8.1 Substituir as telas padrão do starter do Expo (`index`, `explore`) pelo ponto de entrada real de navegação do app para a agenda diária; verificar que o app abre diretamente na agenda diária. `index.tsx` é a agenda diária, `explore.tsx` virou `calendario.tsx` (calendário mensal); confirmado via bundle web (sem erro de import/rota) — visual completo em dispositivo/emulador ainda pendente (sem extensão de navegador conectada nesta sessão).
+- [x] 8.2 Construir a tela de agenda diária listando as doses de hoje com status, a posição no ciclo para medicamentos cíclicos, o progresso do limite diário para medicamentos se necessário (com ação de registrar nova dose), e a sinalização de alerta de estoque; verificar visualmente com dados de teste cobrindo cada tipo de esquema. Lógica coberta por `montarAgendaDoDia` com 8 testes; verificação visual em dispositivo ainda pendente.
+- [x] 8.3 Excluir da agenda diária os medicamentos de duração fixa já encerrada, mantendo-os consultáveis no histórico; verificar com dados de teste que um curso concluído não aparece hoje mas aparece no histórico.
+- [x] 8.4 Construir a tela de calendário mensal mostrando histórico registrado para dias passados e horário previsto para dias futuros (definitivo para diário/dias da semana/cíclico, estimado para intervalo em horas, ausente para se necessário); verificar visualmente navegando até um mês passado e um mês futuro com dados de teste. Lógica coberta por `montarCalendarioMensal` com 6 testes; verificação visual em dispositivo ainda pendente.
 
 ## 9. Verificação de ponta a ponta
 

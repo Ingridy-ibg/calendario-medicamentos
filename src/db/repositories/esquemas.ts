@@ -100,6 +100,17 @@ export function listarEsquemasCiclicos(db: AppDb) {
     .all();
 }
 
+/**
+ * Todo esquema não removido, de qualquer tipo — usado pelas telas de agenda
+ * (src/domain/agenda-views) para: (a) achar os "se necessário" (que nunca
+ * têm linha em `doses` a listar) e (b) projetar dias futuros do calendário
+ * mensal direto a partir da definição do esquema, sem depender do que já foi
+ * materializado na janela rolante.
+ */
+export function listarEsquemasAtivos(db: AppDb) {
+  return db.select().from(esquemas).where(isNull(esquemas.deletedAt)).all();
+}
+
 export type EsquemaRow = NonNullable<ReturnType<typeof buscarEsquemaPorId>>;
 
 type PatchEsquema = Partial<

@@ -10,7 +10,7 @@ import { CRITICIDADES, type Criticidade, TIPOS_ESQUEMA, type TipoEsquema } from 
 import { cadastrarMedicamento, ErroValidacao } from '@/domain/medication-registration/registration';
 import type { DadosEsquemaFormulario, ModoDuracao } from '@/domain/medication-registration/types';
 import type { ErrosValidacao } from '@/domain/medication-registration/validation';
-import { reconciliarNotificacoes, solicitarPermissaoFullScreenIntent } from '@/notifications';
+import { isExpoGo } from '@/lib/expo-go';
 
 const ROTULOS_TIPO: Record<TipoEsquema, string> = {
   DIARIO: 'Diário',
@@ -196,13 +196,19 @@ export default function NovoMedicamentoScreen() {
         new Date(),
       );
       setErros({});
-      if (criticidadeEfetiva === 'especial') {
-        // 5.2: pedida no primeiro cadastro de um medicamento especial, não
-        // em toda abertura do app — é o ponto em que ela passa a ser
-        // relevante (ver design.md).
-        void solicitarPermissaoFullScreenIntent();
+      if (!isExpoGo) {
+        // Import dinâmico, nunca estático: só de importar `expo-notifications`
+        // já lança uma exceção dentro do Expo Go (ver `lib/expo-go.ts`).
+        void import('@/notifications').then(({ reconciliarNotificacoes, solicitarPermissaoFullScreenIntent }) => {
+          if (criticidadeEfetiva === 'especial') {
+            // 5.2: pedida no primeiro cadastro de um medicamento especial, não
+            // em toda abertura do app — é o ponto em que ela passa a ser
+            // relevante (ver design.md).
+            void solicitarPermissaoFullScreenIntent();
+          }
+          void reconciliarNotificacoes(db);
+        });
       }
-      void reconciliarNotificacoes(db);
       router.back();
     } catch (erro) {
       if (erro instanceof ErroValidacao) {
