@@ -9,6 +9,7 @@ export const CHAVES_PREFERENCIAS = {
   nome: 'perfil.nome',
   aparencia: 'aparencia',
   ultimaSaudacao: 'saudacao.ultimaExibicao',
+  telaCheiaPedida: 'permissao.telaCheiaPedida',
 } as const;
 
 /** specs/onboarding: a boas-vindas aparece até ser concluída uma vez. */
@@ -46,4 +47,12 @@ export function lerDataGuardada(valor: string | null): Date | null {
   if (!valor) return null;
   const data = new Date(valor);
   return Number.isNaN(data.getTime()) ? null : data;
+}
+
+/**
+ * A permissão de tela cheia só é pedida no primeiro cadastro de um
+ * medicamento especial (fix-cyclic-and-rolling-window, specs/dose-notifications).
+ */
+export function devePedirTelaCheia(criticidade: 'comum' | 'especial', valorGuardado: string | null): boolean {
+  return criticidade === 'especial' && valorGuardado !== '1';
 }

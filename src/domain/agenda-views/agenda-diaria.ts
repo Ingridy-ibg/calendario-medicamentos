@@ -1,10 +1,12 @@
 import { addDays, startOfDay } from 'date-fns';
 
 import { contarDosesRegistradasNoIntervalo, listarDosesDoIntervalo } from '@/db/repositories/doses';
-import { listarEsquemasAtivos } from '@/db/repositories/esquemas';
+import { listarEsquemasAtivos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { StatusDose } from '@/db/schema';
+import { calcularStatusDoDia } from '@/domain/dose-scheduling/ciclico';
+import { combinarDataEHorario } from '@/domain/dose-scheduling/horario';
 import { temAlertaDeRecompra } from '@/domain/medication-stock/alerta';
 
 export interface ItemAgendaDose {
@@ -34,7 +36,23 @@ export interface ItemAgendaSeNecessario {
   alertaEstoque: boolean;
 }
 
-export type ItemAgenda = ItemAgendaDose | ItemAgendaSeNecessario;
+/**
+ * Cíclico sem ciclo em andamento (recém-cadastrado ou depois do fim da
+ * pausa): não tem linha em `doses`, mas precisa aparecer para o usuário
+ * iniciar a nova cartela (change fix-cyclic-and-rolling-window).
+ */
+export interface ItemAgendaAguardandoCartela {
+  tipo: 'aguardando_cartela';
+  esquemaId: string;
+  medicamentoId: string;
+  nome: string;
+  dosagem: string;
+  /** Hoje no horário do ciclo — define a seção (manhã/tarde/noite) e a ordem. */
+  horario: Date | null;
+  alertaEstoque: boolean;
+}
+
+export type ItemAgenda = ItemAgendaDose | ItemAgendaSeNecessario | ItemAgendaAguardandoCartela;
 
 /**
  * Monta a agenda diária (specs/agenda-views): toda dose com horário previsto
@@ -97,8 +115,30 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
       ];
     });
 
+  const itensAguardandoCartela: ItemAgendaAguardandoCartela[] = esquemas
+    .filter((esquema) => esquema.tipo === 'CICLICO')
+    .flatMap((linha) => {
+      const esquema = paraEsquemaDominio(linha);
+      if (esquema.tipo !== 'CICLICO' || calcularStatusDoDia(esquema, hoje).fase !== 'em_espera') return [];
+      const medicamento = buscarMedicamentoPorId(db, esquema.medicamentoId);
+      if (!medicamento || medicamento.deletedAt) return [];
+      const [horario] = esquema.horarios;
+
+      return [
+        {
+          tipo: 'aguardando_cartela' as const,
+          esquemaId: esquema.id,
+          medicamentoId: medicamento.id,
+          nome: medicamento.nome,
+          dosagem: medicamento.dosagem,
+          horario: horario ? combinarDataEHorario(inicioDoDia, horario) : null,
+          alertaEstoque: temAlertaDeRecompra(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem),
+        },
+      ];
+    });
+
   itensDose.sort((a, b) => (a.horario?.getTime() ?? 0) - (b.horario?.getTime() ?? 0));
   itensSeNecessario.sort((a, b) => a.nome.localeCompare(b.nome));
 
-  return [...itensDose, ...itensSeNecessario];
+  return [...itensDose, ...itensAguardandoCartela, ...itensSeNecessario];
 }

@@ -6,6 +6,7 @@ import {
   type Aparencia,
   CHAVES_PREFERENCIAS,
   deveExibirBoasVindas,
+  devePedirTelaCheia,
   esquemaDaAparencia,
   lerAparencia,
   lerDataGuardada,
@@ -81,4 +82,11 @@ export function lerUltimaSaudacao(): Date | null {
 
 export function gravarUltimaSaudacao(agora: Date): void {
   Storage.setItemSync(CHAVES_PREFERENCIAS.ultimaSaudacao, agora.toISOString());
+}
+
+/** Diz se deve pedir a permissão de tela cheia agora e já marca como pedida. */
+export function consumirPedidoTelaCheia(criticidade: 'comum' | 'especial'): boolean {
+  if (!devePedirTelaCheia(criticidade, lerItem(CHAVES_PREFERENCIAS.telaCheiaPedida))) return false;
+  Storage.setItemSync(CHAVES_PREFERENCIAS.telaCheiaPedida, '1');
+  return true;
 }

@@ -19,6 +19,7 @@ import { db } from '@/db/client';
 import { buscarEsquemaPorId, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import {
   type ItemAgenda,
+  type ItemAgendaAguardandoCartela,
   type ItemAgendaDose,
   type ItemAgendaSeNecessario,
   montarAgendaDoDia,
@@ -26,7 +27,8 @@ import {
 import { agruparPorPeriodo, type ResumoDoDia, resumirDia } from '@/domain/agenda-views/resumo-dia';
 import { confirmarDose, pularDose } from '@/domain/adherence-history/resolucao';
 import { registrarDoseSeNecessarioNoBanco } from '@/domain/adherence-history/se-necessario';
-import type { EsquemaSeNecessario } from '@/domain/dose-scheduling/types';
+import { confirmarNovaCartelaCiclica } from '@/domain/dose-scheduling/resolucao';
+import type { EsquemaCiclico, EsquemaSeNecessario } from '@/domain/dose-scheduling/types';
 import { periodoDoDia, textoSaudacao } from '@/domain/daily-greeting/saudacao';
 import { inicialDoNome } from '@/domain/preferencias/preferencias';
 import { useTheme } from '@/hooks/use-theme';
@@ -196,6 +198,39 @@ function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque:
   );
 }
 
+/**
+ * Cíclico sem ciclo em andamento: o usuário inicia a cartela daqui, o que
+ * registra o primeiro comprimido como tomado agora (fix-cyclic-and-rolling-window).
+ */
+function ItemAguardandoCartela({ item, aoMudar }: { item: ItemAgendaAguardandoCartela; aoMudar: () => void }) {
+  async function comecarCartela() {
+    confirmarNovaCartelaCiclica(db, esquemaDominioOuFalha(item.esquemaId) as EsquemaCiclico, new Date());
+    await reconciliarNotificacoesSeDisponivel(db);
+    aoMudar();
+  }
+
+  return (
+    <Cartao style={{ borderRadius: 18, padding: 16, gap: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
+        <IconeStatus status="pendente" />
+        <View style={{ flex: 1, gap: 2 }}>
+          <ThemedText style={{ fontFamily: FAMILIA_TEXTO[600] }}>{item.nome}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" numerico>
+            {[item.dosagem, item.horario ? format(item.horario, 'HH:mm') : null].filter(Boolean).join(' · ')}
+          </ThemedText>
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          <ThemedText type="smallBold" themeColor="statusAtraso" style={{ textAlign: 'right' }}>
+            Aguardando{'\n'}nova cartela
+          </ThemedText>
+          {item.alertaEstoque ? <SeloEstoqueBaixo /> : null}
+        </View>
+      </View>
+      <Botao rotulo="Comecei a nova cartela" onPress={comecarCartela} />
+    </Cartao>
+  );
+}
+
 function ItemSeNecessario({ item, aoMudar }: { item: ItemAgendaSeNecessario; aoMudar: () => void }) {
   function registrar() {
     const esquema = esquemaDominioOuFalha(item.esquemaId) as EsquemaSeNecessario;
@@ -281,14 +316,18 @@ export default function AgendaDoDiaScreen() {
                 <CabecalhoSecao>{secao.titulo}</CabecalhoSecao>
                 {secao.chave === 'se_necessario'
                   ? secao.itens.map((item) => <ItemSeNecessario key={item.esquemaId} item={item} aoMudar={recarregar} />)
-                  : secao.itens.map((item) => (
-                      <ItemDose
-                        key={item.doseId}
-                        item={item}
-                        destaque={item.doseId === resumo.proxima?.doseId}
-                        aoMudar={recarregar}
-                      />
-                    ))}
+                  : secao.itens.map((item) =>
+                      item.tipo === 'aguardando_cartela' ? (
+                        <ItemAguardandoCartela key={item.esquemaId} item={item} aoMudar={recarregar} />
+                      ) : (
+                        <ItemDose
+                          key={item.doseId}
+                          item={item}
+                          destaque={item.doseId === resumo.proxima?.doseId}
+                          aoMudar={recarregar}
+                        />
+                      ),
+                    )}
               </View>
             ))
           )}

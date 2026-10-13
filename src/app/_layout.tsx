@@ -11,6 +11,7 @@ import { FONTES_DO_APP } from '@/constants/fontes';
 import { db } from '@/db/client';
 import { isExpoGo } from '@/lib/expo-go';
 import { deveExibirSaudacao } from '@/domain/daily-greeting/saudacao';
+import { renovarJanelasAtivas } from '@/domain/dose-scheduling/janela-rolante';
 import { consumirAberturaPorNotificacao } from '@/lib/notificacoes-seguras';
 import { aplicarAparenciaSalva, lerUltimaSaudacao, usePreferencias } from '@/lib/preferencias';
 
@@ -58,6 +59,18 @@ export default function RootLayout() {
   const boasVindasConcluida = usePreferencias((estado) => estado.boasVindasConcluida);
   const estadoNavegacao = useRootNavigationState();
   useSaudacaoDiaria(!!estadoNavegacao?.key && !!success && fontesProntas);
+
+  useEffect(() => {
+    if (!success) return;
+    // Renova a janela de doses na abertura e a cada volta ao primeiro plano —
+    // também no Expo Go, porque não depende de notificações. Roda antes do
+    // reconciliador, que agenda os lembretes a partir dessas doses.
+    renovarJanelasAtivas(db);
+    const assinatura = AppState.addEventListener('change', (estado) => {
+      if (estado === 'active') renovarJanelasAtivas(db);
+    });
+    return () => assinatura.remove();
+  }, [success]);
 
   useEffect(() => {
     if (!success || isExpoGo) return;

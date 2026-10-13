@@ -16,6 +16,7 @@ import type { AcaoNotificacao } from '@/domain/dose-notifications/types';
 import { agendarAlvo, cancelarAlvo } from './agendamento';
 import { buscarContextoDaDose } from './contexto';
 import { reconciliarNotificacoes } from './reconciliador';
+import { renovarJanelasAtivas } from '@/domain/dose-scheduling/janela-rolante';
 
 export const TAREFA_NOTIFICACAO = 'TAREFA_NOTIFICACAO_DOSE';
 export const TAREFA_RECONCILIACAO_PERIODICA = 'TAREFA_RECONCILIACAO_PERIODICA';
@@ -121,7 +122,11 @@ export async function registrarTarefaDeNotificacao(): Promise<void> {
 
 if (!TaskManager.isTaskDefined(TAREFA_RECONCILIACAO_PERIODICA)) {
   TaskManager.defineTask(TAREFA_RECONCILIACAO_PERIODICA, async () => {
-    await reconciliarNotificacoes(db, new Date());
+    const agora = new Date();
+    // Antes de reconciliar: garante doses à frente mesmo se o app não for
+    // aberto por semanas (fix-cyclic-and-rolling-window).
+    renovarJanelasAtivas(db, agora);
+    await reconciliarNotificacoes(db, agora);
   });
 }
 

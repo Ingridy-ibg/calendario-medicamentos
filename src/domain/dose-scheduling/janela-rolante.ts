@@ -1,6 +1,7 @@
-import { addWeeks } from 'date-fns';
+import { addDays, addWeeks, max, startOfDay } from 'date-fns';
 
-import { type NovaDose, substituirDosesFuturas } from '@/db/repositories/doses';
+import { inserirDose, listarDosesPorEsquema, type NovaDose, substituirDosesFuturas } from '@/db/repositories/doses';
+import { listarEsquemasAtivos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import type { AppDb } from '@/db/repositories/types';
 
 import { gerarDosesCiclico } from './ciclico';
@@ -57,4 +58,43 @@ export function materializarJanela(
       }),
     ),
   );
+}
+
+/**
+ * Mantém a janela rolante viva (change fix-cyclic-and-rolling-window): se a
+ * última dose prevista do esquema estiver a menos de `SEMANAS_JANELA_MINIMA`
+ * semanas de `agora`, gera as doses até `SEMANAS_JANELA_MAXIMA` semanas à
+ * frente e **só insere as que faltam** — nunca apaga nem altera doses
+ * existentes (ao contrário de `materializarJanela`, que substitui as não
+ * resolvidas e por isso não serve para rodar a cada abertura). Dias já
+ * passados não são preenchidos; o dia de hoje é. Esquemas sem grade
+ * (intervalo em horas, se necessário) e cíclicos em espera não geram nada.
+ */
+export function renovarJanela(db: AppDb, esquema: Esquema, agora: Date): number {
+  const existentes = listarDosesPorEsquema(db, esquema.id).filter((dose) => dose.dataHoraPrevista !== null);
+  const ultimaPrevista = existentes.reduce<Date | null>(
+    (maior, dose) => (maior === null || dose.dataHoraPrevista! > maior ? dose.dataHoraPrevista! : maior),
+    null,
+  );
+  if (ultimaPrevista && ultimaPrevista >= addWeeks(agora, SEMANAS_JANELA_MINIMA)) {
+    return 0;
+  }
+
+  const inicio = ultimaPrevista ? max([addDays(startOfDay(ultimaPrevista), 1), startOfDay(agora)]) : startOfDay(agora);
+  const geradas = gerarDosesParaJanela(esquema, inicio, addWeeks(agora, SEMANAS_JANELA_MAXIMA));
+  if (!geradas) return 0;
+
+  const jaExiste = new Set(existentes.map((dose) => dose.dataHoraPrevista!.getTime()));
+  let inseridas = 0;
+  for (const dose of geradas) {
+    if (jaExiste.has(dose.dataHoraPrevista.getTime())) continue;
+    inserirDose(db, { esquemaId: esquema.id, dataHoraPrevista: dose.dataHoraPrevista, numeroNoCiclo: dose.numeroNoCiclo ?? null });
+    inseridas++;
+  }
+  return inseridas;
+}
+
+/** Renova a janela de todo esquema ativo — na abertura do app, na volta ao primeiro plano e na tarefa periódica. */
+export function renovarJanelasAtivas(db: AppDb, agora: Date = new Date()): number {
+  return listarEsquemasAtivos(db).reduce((total, linha) => total + renovarJanela(db, paraEsquemaDominio(linha), agora), 0);
 }

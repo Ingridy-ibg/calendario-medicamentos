@@ -140,6 +140,17 @@ export function atualizarEsquema(db: AppDb, id: string, patch: PatchEsquema, ago
   return buscarEsquemaPorId(db, id);
 }
 
+/**
+ * Grava o dia 1 do ciclo atual de um esquema CICLICO — só chamado quando o
+ * primeiro comprimido de uma nova cartela é confirmado (ver
+ * `confirmarNovaCartelaCiclica`). Separado de `atualizarEsquema` para que
+ * editar os parâmetros nunca reinicie o ciclo.
+ */
+export function definirInicioCiclo(db: AppDb, id: string, dataInicioCiclo: Date, agora: Date = new Date()) {
+  db.update(esquemas).set({ dataInicioCiclo, updatedAt: agora }).where(eq(esquemas.id, id)).run();
+  return buscarEsquemaPorId(db, id);
+}
+
 export function removerEsquema(db: AppDb, id: string, agora: Date) {
   db.update(esquemas).set({ deletedAt: agora, updatedAt: agora }).where(eq(esquemas.id, id)).run();
 }

@@ -1,6 +1,6 @@
 import type { StatusDose } from '@/db/schema';
 
-import type { ItemAgenda, ItemAgendaDose, ItemAgendaSeNecessario } from './agenda-diaria';
+import type { ItemAgenda, ItemAgendaAguardandoCartela, ItemAgendaDose, ItemAgendaSeNecessario } from './agenda-diaria';
 
 export interface ResumoDoDia {
   /** Doses agendadas resolvidas como tomada ou tomada com atraso. */
@@ -21,7 +21,9 @@ function doses(itens: ItemAgenda[]): ItemAgendaDose[] {
   return itens.filter((item): item is ItemAgendaDose => item.tipo === 'dose');
 }
 
-function horarioOuInicio(item: ItemAgendaDose): number {
+type ItemComHorario = ItemAgendaDose | ItemAgendaAguardandoCartela;
+
+function horarioOuInicio(item: ItemComHorario): number {
   return item.horario?.getTime() ?? Number.NEGATIVE_INFINITY;
 }
 
@@ -43,7 +45,7 @@ export function resumirDia(itens: ItemAgenda[]): ResumoDoDia {
 export type ChaveSecaoAgenda = 'manha' | 'tarde' | 'noite' | 'se_necessario';
 
 export type SecaoAgenda =
-  | { chave: 'manha' | 'tarde' | 'noite'; titulo: string; itens: ItemAgendaDose[] }
+  | { chave: 'manha' | 'tarde' | 'noite'; titulo: string; itens: ItemComHorario[] }
   | { chave: 'se_necessario'; titulo: string; itens: ItemAgendaSeNecessario[] };
 
 const TITULOS: Record<ChaveSecaoAgenda, string> = {
@@ -63,12 +65,15 @@ function periodoDoHorario(horario: Date | null): 'manha' | 'tarde' | 'noite' {
 }
 
 /**
- * Agrupa a agenda em Manhã (< 12:00), Tarde (< 18:00), Noite e "Se
+ * Agrupa a agenda (doses e cíclicos aguardando cartela) em Manhã (< 12:00), Tarde (< 18:00), Noite e "Se
  * necessário", nessa ordem, mantendo a ordem de horário dentro de cada uma e
  * omitindo seções vazias (specs/agenda-views).
  */
 export function agruparPorPeriodo(itens: ItemAgenda[]): SecaoAgenda[] {
-  const agendadas = [...doses(itens)].sort((a, b) => horarioOuInicio(a) - horarioOuInicio(b));
+  // Cíclicos aguardando nova cartela entram na seção do horário do ciclo.
+  const agendadas = itens
+    .filter((item): item is ItemComHorario => item.tipo === 'dose' || item.tipo === 'aguardando_cartela')
+    .sort((a, b) => horarioOuInicio(a) - horarioOuInicio(b));
   const secoes: SecaoAgenda[] = (['manha', 'tarde', 'noite'] as const).map((chave) => ({
     chave,
     titulo: TITULOS[chave],

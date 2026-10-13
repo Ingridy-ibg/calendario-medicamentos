@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTestDb, type TestDb } from '@/db/create-test-db';
 import { buscarDosePorId, inserirDose, listarDosesPorEsquema } from '@/db/repositories/doses';
-import { inserirEsquema } from '@/db/repositories/esquemas';
+import { buscarEsquemaPorId, inserirEsquema, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId, inserirMedicamento } from '@/db/repositories/medicamentos';
 
+import { calcularStatusDoDia } from './ciclico';
 import { materializarJanela } from './janela-rolante';
 import { confirmarNovaCartelaCiclica, resolverDoseEAgendarProxima } from './resolucao';
 import { registrarDoseSeNecessario } from './se-necessario';
@@ -124,6 +125,8 @@ describe('resolverDoseEAgendarProxima — de ponta a ponta para cada tipo de esq
     const novoEsquema = confirmarNovaCartelaCiclica(db, esquemaEmEspera, agora);
 
     expect(novoEsquema.dataInicioCiclo).toEqual(agora);
+    // A âncora tem de estar no banco, não só no objeto devolvido.
+    expect(buscarEsquemaPorId(db, esquemaId)?.dataInicioCiclo).toEqual(agora);
     const dosesGeradas = listarDosesPorEsquema(db, esquemaId);
     const doseDeHoje = dosesGeradas.find((dose) => dose.numeroNoCiclo === 1);
     expect(doseDeHoje).toMatchObject({ status: 'tomada' });
@@ -154,5 +157,37 @@ describe('resolverDoseEAgendarProxima — de ponta a ponta para cada tipo de esq
     expect(terceiro.avisoLimiteExcedido).toBe(true);
 
     expect(listarDosesPorEsquema(db, esquemaId)).toHaveLength(3);
+  });
+});
+
+describe('confirmarNovaCartelaCiclica — ciclo continua depois de reabrir o app', () => {
+  it('lendo o esquema do banco, a agenda do dia seguinte tem a dose do dia 2', () => {
+    const db = createTestDb();
+    const medicamentoId = inserirMedicamento(db, {
+      nome: 'Anticoncepcional',
+      dosagem: '1 comp.',
+      criticidade: 'especial',
+      quantidadeEmEstoque: 28,
+      quantidadePorEmbalagem: 21,
+    }).id;
+    const esquemaId = inserirEsquema(db, {
+      tipo: 'CICLICO',
+      medicamentoId,
+      diasAtivos: 21,
+      diasPausa: 7,
+      dataInicioCiclo: null,
+      horarios: ['22:00'],
+    }).id;
+    const agora = new Date(2026, 9, 12, 22, 5);
+
+    confirmarNovaCartelaCiclica(db, paraEsquemaDominio(buscarEsquemaPorId(db, esquemaId)!) as EsquemaCiclico, agora);
+
+    // "Reabrir o app": tudo é recalculado a partir do que está no banco.
+    const relido = paraEsquemaDominio(buscarEsquemaPorId(db, esquemaId)!) as EsquemaCiclico;
+    expect(calcularStatusDoDia(relido, new Date(2026, 9, 13))).toEqual({ fase: 'ativo', diaDoCiclo: 2, totalDiasAtivos: 21 });
+    expect(calcularStatusDoDia(relido, new Date(2026, 10, 2)).fase).toBe('pausa');
+    expect(calcularStatusDoDia(relido, new Date(2026, 10, 8)).fase).toBe('pausa');
+    const amanha = listarDosesPorEsquema(db, esquemaId).find((dose) => dose.numeroNoCiclo === 2);
+    expect(amanha?.dataHoraPrevista).toEqual(new Date(2026, 9, 13, 22, 0));
   });
 });

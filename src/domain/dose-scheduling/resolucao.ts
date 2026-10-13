@@ -1,4 +1,5 @@
 import { inserirDose, resolverDose } from '@/db/repositories/doses';
+import { definirInicioCiclo } from '@/db/repositories/esquemas';
 import type { AppDb } from '@/db/repositories/types';
 import { decrementarEstoque } from '@/domain/medication-stock/estoque';
 
@@ -55,13 +56,18 @@ export function resolverDoseEAgendarProxima(db: AppDb, esquema: Esquema, doseId:
  */
 export function confirmarNovaCartelaCiclica(db: AppDb, esquema: EsquemaCiclico, agora: Date) {
   const novoEsquema = confirmarPrimeiraDoseCiclo(esquema, agora);
-  const dosesInseridas = materializarJanela(db, novoEsquema, agora);
+  db.transaction((tx) => {
+    // A âncora precisa ir para o banco: é dela que a agenda, o calendário, os
+    // lembretes e a renovação da janela recalculam o ciclo depois.
+    definirInicioCiclo(tx, esquema.id, agora, agora);
+    const dosesInseridas = materializarJanela(tx, novoEsquema, agora);
 
-  const primeiraDose = dosesInseridas.find((dose) => dose.numeroNoCiclo === 1);
-  if (primeiraDose) {
-    resolverDose(db, primeiraDose.id, { status: 'tomada', dataHoraRegistro: agora });
-    decrementarEstoque(db, novoEsquema.medicamentoId, agora);
-  }
+    const primeiraDose = dosesInseridas.find((dose) => dose.numeroNoCiclo === 1);
+    if (primeiraDose) {
+      resolverDose(tx, primeiraDose.id, { status: 'tomada', dataHoraRegistro: agora });
+      decrementarEstoque(tx, novoEsquema.medicamentoId, agora);
+    }
+  });
 
   return novoEsquema;
 }

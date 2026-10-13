@@ -1,3 +1,4 @@
+import { addDays } from 'date-fns';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTestDb, type TestDb } from '@/db/create-test-db';
@@ -5,7 +6,10 @@ import { listarDosesPorEsquema, resolverDose } from '@/db/repositories/doses';
 import { inserirEsquema } from '@/db/repositories/esquemas';
 import { inserirMedicamento } from '@/db/repositories/medicamentos';
 
-import { materializarJanela, SEMANAS_JANELA_MAXIMA } from './janela-rolante';
+import { montarAgendaDoDia } from '@/domain/agenda-views/agenda-diaria';
+import { cadastrarMedicamento, removerMedicamentoComHistorico } from '@/domain/medication-registration/registration';
+
+import { materializarJanela, renovarJanelasAtivas, SEMANAS_JANELA_MAXIMA } from './janela-rolante';
 import type { Esquema } from './types';
 
 describe('materializarJanela', () => {
@@ -125,5 +129,84 @@ describe('materializarJanela', () => {
     expect(materializarJanela(db, esquemaSeNecessario, hoje)).toEqual([]);
     expect(listarDosesPorEsquema(db, esquemaCiclicoId)).toEqual([]);
     expect(listarDosesPorEsquema(db, esquemaSeNecessarioId)).toEqual([]);
+  });
+});
+
+describe('renovarJanela / renovarJanelasAtivas', () => {
+  const cadastro = new Date(2026, 8, 7, 7, 0); // 07/09/2026
+  const comuns = { nome: 'Losartana', dosagem: '50 mg', criticidade: 'comum' as const, quantidadeEmEstoque: 30, quantidadePorEmbalagem: 30 };
+
+  function dosesDoDia(db: TestDb, dia: Date) {
+    return montarAgendaDoDia(db, dia).filter((item) => item.tipo === 'dose');
+  }
+
+  it('diário contínuo cadastrado há 35 dias volta a ter dose hoje e pelo menos 2 semanas à frente', () => {
+    const db = createTestDb();
+    cadastrarMedicamento(db, { comuns, esquema: { tipo: 'DIARIO', horarios: ['08:00'], duracao: { modo: 'continuo' } } }, cadastro);
+    const hoje = addDays(cadastro, 35);
+    expect(dosesDoDia(db, hoje)).toHaveLength(0);
+
+    expect(renovarJanelasAtivas(db, hoje)).toBeGreaterThan(0);
+
+    expect(dosesDoDia(db, hoje)).toHaveLength(1);
+    expect(dosesDoDia(db, addDays(hoje, 14))).toHaveLength(1);
+  });
+
+  it('rodar duas vezes não duplica, e doses resolvidas ficam intactas', () => {
+    const db = createTestDb();
+    const { esquema } = cadastrarMedicamento(
+      db,
+      { comuns, esquema: { tipo: 'DIARIO', horarios: ['08:00'], duracao: { modo: 'continuo' } } },
+      cadastro,
+    );
+    const hoje = addDays(cadastro, 20);
+    const resolvida = listarDosesPorEsquema(db, esquema.id)[0];
+    resolverDose(db, resolvida.id, { status: 'tomada', dataHoraRegistro: resolvida.dataHoraPrevista! });
+
+    renovarJanelasAtivas(db, hoje);
+    const depoisDaPrimeira = listarDosesPorEsquema(db, esquema.id);
+    expect(renovarJanelasAtivas(db, hoje)).toBe(0);
+    const depoisDaSegunda = listarDosesPorEsquema(db, esquema.id);
+
+    expect(depoisDaSegunda).toHaveLength(depoisDaPrimeira.length);
+    const horarios = depoisDaSegunda.map((dose) => dose.dataHoraPrevista!.getTime());
+    expect(new Set(horarios).size).toBe(horarios.length);
+    expect(depoisDaSegunda.find((dose) => dose.id === resolvida.id)?.status).toBe('tomada');
+  });
+
+  it('não preenche dias passados que ficaram sem dose', () => {
+    const db = createTestDb();
+    cadastrarMedicamento(db, { comuns, esquema: { tipo: 'DIARIO', horarios: ['08:00'], duracao: { modo: 'continuo' } } }, cadastro);
+    const hoje = addDays(cadastro, 35);
+    renovarJanelasAtivas(db, hoje);
+    expect(dosesDoDia(db, addDays(cadastro, 30))).toHaveLength(0);
+  });
+
+  it('tratamento de duração fixa já encerrado não gera doses', () => {
+    const db = createTestDb();
+    const { esquema } = cadastrarMedicamento(
+      db,
+      { comuns, esquema: { tipo: 'DIARIO', horarios: ['08:00'], duracao: { modo: 'dias', dias: 10 } } },
+      cadastro,
+    );
+    const antes = listarDosesPorEsquema(db, esquema.id).length;
+    expect(renovarJanelasAtivas(db, addDays(cadastro, 20))).toBe(0);
+    expect(listarDosesPorEsquema(db, esquema.id)).toHaveLength(antes);
+  });
+
+  it('cíclico em espera e esquema removido são ignorados', () => {
+    const db = createTestDb();
+    cadastrarMedicamento(
+      db,
+      { comuns: { ...comuns, criticidade: 'especial' }, esquema: { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '22:00' } },
+      cadastro,
+    );
+    const { medicamento } = cadastrarMedicamento(
+      db,
+      { comuns, esquema: { tipo: 'DIARIO', horarios: ['08:00'], duracao: { modo: 'continuo' } } },
+      cadastro,
+    );
+    removerMedicamentoComHistorico(db, medicamento.id, cadastro);
+    expect(renovarJanelasAtivas(db, addDays(cadastro, 35))).toBe(0);
   });
 });

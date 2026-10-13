@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   deveExibirBoasVindas,
+  devePedirTelaCheia,
   esquemaDaAparencia,
   inicialDoNome,
   lerAparencia,
@@ -60,5 +61,16 @@ describe('lerDataGuardada', () => {
   it('ausente ou inválida vira null', () => {
     expect(lerDataGuardada(null)).toBeNull();
     expect(lerDataGuardada('ontem')).toBeNull();
+  });
+});
+
+describe('devePedirTelaCheia', () => {
+  it('pede no primeiro especial', () => {
+    expect(devePedirTelaCheia('especial', null)).toBe(true);
+  });
+
+  it('não pede de novo nem para comum', () => {
+    expect(devePedirTelaCheia('especial', '1')).toBe(false);
+    expect(devePedirTelaCheia('comum', null)).toBe(false);
   });
 });

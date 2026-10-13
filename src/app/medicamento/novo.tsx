@@ -21,6 +21,7 @@ import type { DadosEsquemaFormulario, ModoDuracao } from '@/domain/medication-re
 import type { ErrosValidacao } from '@/domain/medication-registration/validation';
 import { useTheme } from '@/hooks/use-theme';
 import { isExpoGo } from '@/lib/expo-go';
+import { consumirPedidoTelaCheia } from '@/lib/preferencias';
 import { Tocavel } from '@/components/ui/tocavel';
 
 const ROTULOS_TIPO: Record<TipoEsquema, string> = {
@@ -262,11 +263,11 @@ export default function NovoMedicamentoScreen() {
       if (!isExpoGo) {
         // Import dinâmico, nunca estático: só de importar `expo-notifications`
         // já lança uma exceção dentro do Expo Go (ver `lib/expo-go.ts`).
+        const pedirTelaCheia = consumirPedidoTelaCheia(criticidadeEfetiva);
         void import('@/notifications').then(({ reconciliarNotificacoes, solicitarPermissaoFullScreenIntent }) => {
-          if (criticidadeEfetiva === 'especial') {
-            // 5.2: pedida no primeiro cadastro de um medicamento especial, não
-            // em toda abertura do app — é o ponto em que ela passa a ser
-            // relevante (ver design.md).
+          if (pedirTelaCheia) {
+            // 5.2: pedida só no primeiro cadastro de um medicamento especial
+            // do aparelho — é o ponto em que ela passa a ser relevante.
             void solicitarPermissaoFullScreenIntent();
           }
           void reconciliarNotificacoes(db);
