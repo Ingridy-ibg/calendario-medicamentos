@@ -4,6 +4,7 @@ import { createTestDb, type TestDb } from '@/db/create-test-db';
 import { listarDosesPorEsquema } from '@/db/repositories/doses';
 import { inserirEsquema } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId, inserirMedicamento } from '@/db/repositories/medicamentos';
+import { exigeConfirmacaoAoRegistrar } from '@/domain/dose-scheduling/se-necessario';
 import type { EsquemaSeNecessario } from '@/domain/dose-scheduling/types';
 
 import { registrarDoseSeNecessarioNoBanco } from './se-necessario';
@@ -71,5 +72,44 @@ describe('registrarDoseSeNecessarioNoBanco', () => {
     registrarDoseSeNecessarioNoBanco(db, esquema, new Date(2026, 0, 10, 8, 0));
     registrarDoseSeNecessarioNoBanco(db, esquema, new Date(2026, 0, 10, 14, 0));
     expect(buscarMedicamentoPorId(db, esquema.medicamentoId)?.quantidadeEmEstoque).toBe(18);
+  });
+});
+
+describe('confirmação ao registrar no limite (warn-as-needed-limit)', () => {
+  let db: TestDb;
+  beforeEach(() => (db = createTestDb()));
+
+  function preencherAteOLimite(esquema: EsquemaSeNecessario) {
+    for (let hora = 8; hora < 8 + esquema.limiteDiario; hora++) {
+      registrarDoseSeNecessarioNoBanco(db, esquema, new Date(2026, 0, 10, hora));
+    }
+  }
+
+  it('dentro do limite não pede confirmação', () => {
+    const esquema = criarEsquema(db, 4);
+    expect(exigeConfirmacaoAoRegistrar(3, esquema.limiteDiario)).toBe(false);
+  });
+
+  it('cancelando no limite, nada é gravado e o estoque não muda', () => {
+    const esquema = criarEsquema(db, 4);
+    preencherAteOLimite(esquema);
+    expect(exigeConfirmacaoAoRegistrar(4, esquema.limiteDiario)).toBe(true);
+
+    // "Cancelar": o registro não é chamado.
+    expect(listarDosesPorEsquema(db, esquema.id)).toHaveLength(4);
+    expect(buscarMedicamentoPorId(db, esquema.medicamentoId)?.quantidadeEmEstoque).toBe(16);
+  });
+
+  it('confirmando no limite, a dose é gravada e o estoque diminui uma unidade', () => {
+    const esquema = criarEsquema(db, 4);
+    preencherAteOLimite(esquema);
+    expect(exigeConfirmacaoAoRegistrar(4, esquema.limiteDiario)).toBe(true);
+
+    // "Registrar mesmo assim".
+    const { avisoLimiteExcedido } = registrarDoseSeNecessarioNoBanco(db, esquema, new Date(2026, 0, 10, 20));
+
+    expect(avisoLimiteExcedido).toBe(true);
+    expect(listarDosesPorEsquema(db, esquema.id)).toHaveLength(5);
+    expect(buscarMedicamentoPorId(db, esquema.medicamentoId)?.quantidadeEmEstoque).toBe(15);
   });
 });

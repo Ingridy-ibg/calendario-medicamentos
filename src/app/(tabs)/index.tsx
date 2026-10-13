@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -29,6 +29,7 @@ import { marcarPerdidasPorTempo } from '@/domain/adherence-history/perdidas';
 import { confirmarDose, pularDose } from '@/domain/adherence-history/resolucao';
 import { registrarDoseSeNecessarioNoBanco } from '@/domain/adherence-history/se-necessario';
 import { confirmarNovaCartelaCiclica } from '@/domain/dose-scheduling/resolucao';
+import { estadoLimiteSeNecessario, exigeConfirmacaoAoRegistrar } from '@/domain/dose-scheduling/se-necessario';
 import type { EsquemaCiclico, EsquemaSeNecessario } from '@/domain/dose-scheduling/types';
 import { periodoDoDia, textoSaudacao } from '@/domain/daily-greeting/saudacao';
 import { inicialDoNome } from '@/domain/preferencias/preferencias';
@@ -248,10 +249,30 @@ function ItemAguardandoCartela({ item, aoMudar }: { item: ItemAgendaAguardandoCa
 }
 
 function ItemSeNecessario({ item, aoMudar }: { item: ItemAgendaSeNecessario; aoMudar: () => void }) {
+  const theme = useTheme();
+  const estado = estadoLimiteSeNecessario(item.registradasHoje, item.limiteDiario);
+  const corContador = estado === 'acima' ? theme.statusPerdida : estado === 'atingido' ? theme.statusAtraso : theme.textSecondary;
+
   function registrar() {
     const esquema = esquemaDominioOuFalha(item.esquemaId) as EsquemaSeNecessario;
     registrarDoseSeNecessarioNoBanco(db, esquema, new Date());
     aoMudar();
+  }
+
+  // Dentro do limite: um toque. No limite ou acima: confirma antes (warn-as-needed-limit).
+  function aoTocarRegistrar() {
+    if (!exigeConfirmacaoAoRegistrar(item.registradasHoje, item.limiteDiario)) {
+      registrar();
+      return;
+    }
+    Alert.alert(
+      'Limite diário atingido',
+      `Você já tomou ${item.registradasHoje} de ${item.limiteDiario} hoje. Tomar mais que o recomendado não é aconselhado.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Registrar mesmo assim', style: 'destructive', onPress: registrar },
+      ],
+    );
   }
 
   return (
@@ -263,15 +284,26 @@ function ItemSeNecessario({ item, aoMudar }: { item: ItemAgendaSeNecessario; aoM
         style={{ flex: 1, gap: 2 }}>
         <ThemedText style={{ fontFamily: FAMILIA_TEXTO[600] }}>{item.nome}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" numerico>
-          {item.dosagem} · {item.registradasHoje} de {item.limiteDiario} hoje
+          {item.dosagem} ·{' '}
+          <ThemedText type="small" numerico style={{ color: corContador, fontFamily: estado === 'abaixo' ? FAMILIA_TEXTO[500] : FAMILIA_TEXTO[700] }}>
+            {item.registradasHoje} de {item.limiteDiario} hoje
+          </ThemedText>
         </ThemedText>
+        {estado !== 'abaixo' ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <Icone nome="alerta" cor={corContador} tamanho={14} />
+            <ThemedText type="caption" style={{ color: corContador, fontFamily: FAMILIA_TEXTO[600] }}>
+              {estado === 'acima' ? 'Acima do limite recomendado' : 'Limite de hoje atingido'}
+            </ThemedText>
+          </View>
+        ) : null}
         {item.alertaEstoque ? (
           <View style={{ alignSelf: 'flex-start', marginTop: 4 }}>
             <SeloEstoqueBaixo />
           </View>
         ) : null}
       </Tocavel>
-      <Botao rotulo="Registrar dose" variante="suave" onPress={registrar} />
+      <Botao rotulo="Registrar dose" variante="suave" onPress={aoTocarRegistrar} />
     </Cartao>
   );
 }

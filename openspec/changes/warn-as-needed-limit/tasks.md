@@ -1,6 +1,6 @@
 ## 1. Regra pura
 
-- [ ] 1.1 Implementar `estadoLimiteSeNecessario(registradas, limite)` em `src/domain/dose-scheduling/se-necessario.ts`; verificar com testes de 3/4 (abaixo), 4/4 (atingido), 5/4 (acima) e limite 1, e que `exigeConfirmacao` coincide com `avisoLimiteExcedido`.
+- [x] 1.1 Implementar `estadoLimiteSeNecessario(registradas, limite)` em `src/domain/dose-scheduling/se-necessario.ts`; verificar com testes de 3/4 (abaixo), 4/4 (atingido), 5/4 (acima) e limite 1, e que `exigeConfirmacao` coincide com `avisoLimiteExcedido`.
 
 ## 2. Agenda
 
