@@ -27,11 +27,11 @@ export function dosesRestantesDoTratamento(db: AppDb, esquema: Esquema, agora: D
 export function alertaEstoqueDoMedicamento(
   db: AppDb,
   esquema: Esquema,
-  medicamento: { quantidadeEmEstoque: number; quantidadePorEmbalagem: number; naAgenda?: boolean },
+  medicamento: { quantidadeEmEstoque: number; quantidadePorEmbalagem: number; naAgenda: boolean },
   agora: Date,
 ): AlertaEstoque {
   // Fora da agenda não tem alertas de estoque (agenda-membership).
-  if (medicamento.naAgenda === false) return null;
+  if (!medicamento.naAgenda) return null;
   return classificarEstoque(
     esquema,
     medicamento.quantidadeEmEstoque,

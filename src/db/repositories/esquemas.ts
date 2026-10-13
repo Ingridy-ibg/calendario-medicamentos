@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, type SQL } from 'drizzle-orm';
 
 import type { Esquema } from '@/domain/dose-scheduling/types';
 import { generateId } from '@/lib/id';
@@ -96,30 +96,37 @@ export function listarEsquemasPorMedicamento(db: AppDb, medicamentoId: string) {
 }
 
 /**
- * Todo esquema cíclico não removido — usado pelo reconciliador de
+ * Todo esquema cíclico não removido e na agenda — usado pelo reconciliador de
  * notificações (src/notifications/contexto.ts) para derivar os lembretes de
  * dia de pausa, que não têm linha em `doses` e por isso não seriam
  * descobertos partindo apenas das doses ativas.
  */
 export function listarEsquemasCiclicos(db: AppDb) {
-  return listarEsquemasAtivos(db).filter((esquema) => esquema.tipo === 'CICLICO');
+  return selecionarEsquemasNaAgenda(db, eq(esquemas.tipo, 'CICLICO'));
 }
 
 /**
- * Todo esquema não removido, de qualquer tipo — usado pelas telas de agenda
+ * Todo esquema não removido e na agenda, de qualquer tipo — usado pelas telas de agenda
  * (src/domain/agenda-views) para: (a) achar os "se necessário" (que nunca
  * têm linha em `doses` a listar) e (b) projetar dias futuros do calendário
  * mensal direto a partir da definição do esquema, sem depender do que já foi
  * materializado na janela rolante.
  */
 export function listarEsquemasAtivos(db: AppDb) {
-  // Fora da agenda (agenda-membership, decisão 2): sem doses, lembretes nem
-  // projeção — agenda, calendário futuro, renovação e reconciliador partem daqui.
+  return selecionarEsquemasNaAgenda(db);
+}
+
+/**
+ * Fora da agenda (agenda-membership, decisão 2): sem doses, lembretes nem
+ * projeção — agenda, calendário futuro, renovação e reconciliador partem
+ * daqui. `filtro` restringe mais no próprio SQL (ex.: só cíclicos).
+ */
+function selecionarEsquemasNaAgenda(db: AppDb, filtro?: SQL) {
   return db
     .select({ esquema: esquemas })
     .from(esquemas)
     .innerJoin(medicamentos, eq(medicamentos.id, esquemas.medicamentoId))
-    .where(and(isNull(esquemas.deletedAt), isNull(medicamentos.deletedAt), eq(medicamentos.naAgenda, true)))
+    .where(and(isNull(esquemas.deletedAt), isNull(medicamentos.deletedAt), eq(medicamentos.naAgenda, true), filtro))
     .all()
     .map((linha) => linha.esquema);
 }

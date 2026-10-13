@@ -1,9 +1,10 @@
-import { addHours, isSameDay } from 'date-fns';
+import { addHours, isSameDay, startOfDay } from 'date-fns';
 
 import {
   apagarDoseNaoResolvida,
   inserirDose,
   listarDosesPorEsquema,
+  listarDosesResolvidasPorEsquema,
   resolverDose,
   substituirDosesFuturas,
 } from '@/db/repositories/doses';
@@ -31,7 +32,7 @@ import { materializarJanela, rematerializarJanelaAposEdicao } from '@/domain/dos
 
 import { paraDadosFormulario, paraValoresFormulario } from './formulario';
 import type { DadosEsquemaFormulario, DadosFormularioMedicamento, ModoDuracao } from './types';
-import { montarPreviaCadastro, type PlanoCadastro, type PreviaCadastro } from './previa';
+import { type HistoricoDaVolta, montarPreviaCadastro, type PlanoCadastro, type PreviaCadastro } from './previa';
 import { validarEmUso, validarEsquema, validarFormulario } from './validation';
 
 export class ErroValidacao extends Error {
@@ -105,6 +106,8 @@ function paraNovoEsquema(
 function materializarDosesIniciais(db: AppDb, esquemaRow: EsquemaRow, plano: PlanoCadastro, agora: Date) {
   const dominio = paraEsquemaDominio(esquemaRow);
   const tomadasHoje = new Set(plano.dosesTomadasHoje.map((data) => data.getTime()));
+  // Volta à agenda: horário que já tem dose resolvida não ganha outra (fix-agenda-membership-review).
+  const jaResolvidos = new Set(plano.horariosJaResolvidos.map((data) => data.getTime()));
 
   switch (dominio.tipo) {
     case 'DIARIO':
@@ -113,7 +116,12 @@ function materializarDosesIniciais(db: AppDb, esquemaRow: EsquemaRow, plano: Pla
       // Cíclico sem âncora fica aguardando a nova cartela: nada a gerar.
       materializarJanela(db, dominio, agora);
       for (const dose of listarDosesPorEsquema(db, dominio.id)) {
-        if (!dose.dataHoraPrevista || !isSameDay(dose.dataHoraPrevista, agora) || dose.dataHoraPrevista > agora) continue;
+        if (!dose.dataHoraPrevista) continue;
+        if (jaResolvidos.has(dose.dataHoraPrevista.getTime())) {
+          apagarDoseNaoResolvida(db, dose.id);
+          continue;
+        }
+        if (!isSameDay(dose.dataHoraPrevista, agora) || dose.dataHoraPrevista > agora) continue;
         if (tomadasHoje.has(dose.dataHoraPrevista.getTime())) {
           resolverDose(db, dose.id, { status: 'tomada', dataHoraRegistro: dose.dataHoraPrevista });
         } else {
@@ -337,25 +345,47 @@ export function retirarDaAgenda(db: AppDb, medicamentoId: string, agora: Date) {
   });
 }
 
+/** Doses resolvidas de hoje em diante e a última tomada — o que a volta à agenda não pode duplicar nem ignorar. */
+function historicoDaVolta(db: AppDb, esquemaId: string, agora: Date): HistoricoDaVolta {
+  const resolvidas = listarDosesResolvidasPorEsquema(db, esquemaId);
+  const tomadas = resolvidas.filter((dose) => dose.status === 'tomada' || dose.status === 'tomada_com_atraso');
+  const ultimaTomada = tomadas.reduce<Date | null>((ultima, dose) => {
+    const quando = dose.dataHoraRegistro ?? dose.dataHoraPrevista;
+    return quando && (ultima === null || quando > ultima) ? quando : ultima;
+  }, null);
+  return {
+    resolvidas: resolvidas.flatMap((dose) =>
+      dose.dataHoraPrevista && dose.dataHoraPrevista >= startOfDay(agora)
+        ? [{ previsto: dose.dataHoraPrevista, tomada: dose.status === 'tomada' || dose.status === 'tomada_com_atraso' }]
+        : [],
+    ),
+    ultimaTomada,
+  };
+}
+
 /**
  * Dados e prévia da volta à agenda — o medicamento como se fosse cadastrado
- * agora, sem "Já estava tomando". É o que a confirmação mostra.
+ * agora, sem "Já estava tomando", mas sem repetir horários já resolvidos e,
+ * no intervalo em horas, contando a partir da última dose tomada. É o que a
+ * confirmação mostra e o que `adicionarAAgenda` grava.
  */
 export function prepararVoltaAAgenda(db: AppDb, medicamentoId: string, agora: Date): { dados: DadosFormularioMedicamento; previa: PreviaCadastro } {
   const medicamento = buscarMedicamentoPorId(db, medicamentoId);
   if (!medicamento) throw new Error(`Medicamento ${medicamentoId} não encontrado`);
-  const dados = paraDadosFormulario(paraValoresFormulario(medicamento, esquemaAtivoDe(db, medicamentoId)));
-  return { dados, previa: montarPreviaCadastro(dados, agora) };
+  const esquema = esquemaAtivoDe(db, medicamentoId);
+  const dados = paraDadosFormulario(paraValoresFormulario(medicamento, esquema));
+  return { dados, previa: montarPreviaCadastro(dados, agora, historicoDaVolta(db, esquema.id, agora)) };
 }
 
 /**
- * Volta à agenda: o esquema recomeça agora (duração a partir de hoje,
- * intervalo com a primeira dose agora, cíclico aguardando a nova cartela) e
- * as doses iniciais saem como no cadastro — horários de hoje já passados não
- * geram dose. Quem chama reconcilia as notificações.
+ * Volta à agenda com a prévia já conferida (de `prepararVoltaAAgenda`): o
+ * esquema recomeça em `previa.agora` (duração a partir de hoje, cíclico
+ * aguardando a nova cartela) e as doses saem do plano — horários de hoje já
+ * passados ou já resolvidos não geram dose. Quem chama reconcilia as
+ * notificações.
  */
-export function adicionarAAgenda(db: AppDb, medicamentoId: string, agora: Date) {
-  const { previa } = prepararVoltaAAgenda(db, medicamentoId, agora);
+export function adicionarAAgenda(db: AppDb, medicamentoId: string, previa: PreviaCadastro) {
+  const { agora } = previa;
   return db.transaction((tx) => {
     const esquema = esquemaAtivoDe(tx, medicamentoId);
     atualizarMedicamento(tx, medicamentoId, { naAgenda: true }, agora);

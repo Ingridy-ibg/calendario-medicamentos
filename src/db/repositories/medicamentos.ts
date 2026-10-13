@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, count, eq, isNull, sql } from 'drizzle-orm';
 
 import { generateId } from '@/lib/id';
 
@@ -58,24 +58,39 @@ export function removerMedicamento(db: AppDb, id: string, agora: Date) {
 }
 
 /**
- * Medicamentos não removidos com seu esquema ativo (aba Medicamentos —
- * specs/medication-management): os da agenda primeiro, os fora da agenda por
- * último, cada grupo em ordem alfabética (agenda-membership, decisão 5).
+ * Uma página dos medicamentos não removidos com seu esquema ativo (aba
+ * Medicamentos — specs/medication-management): os da agenda primeiro, os
+ * fora da agenda por último, cada grupo em ordem alfabética (agenda-membership,
+ * decisão 5). `naAgenda` filtra; sem ele, vêm todos. Uma consulta só, com o
+ * filtro no SQL; a ordem fica em JS porque o SQLite não ordena acentos como o
+ * português ("Ácido" antes de "Amoxicilina") — fix-agenda-membership-review.
  */
-export function listarMedicamentosComEsquema(db: AppDb) {
-  const ativos = db.select().from(medicamentos).where(isNull(medicamentos.deletedAt)).all();
-  return ativos
-    .flatMap((medicamento) => {
-      const esquema = db
-        .select()
-        .from(esquemas)
-        .where(and(eq(esquemas.medicamentoId, medicamento.id), isNull(esquemas.deletedAt)))
-        .get();
-      return esquema ? [{ medicamento, esquema }] : [];
-    })
+export function listarMedicamentosComEsquema(
+  db: AppDb,
+  { naAgenda, limite, deslocamento = 0 }: { naAgenda?: boolean; limite?: number; deslocamento?: number } = {},
+) {
+  const condicoes = [isNull(medicamentos.deletedAt), isNull(esquemas.deletedAt)];
+  if (naAgenda !== undefined) condicoes.push(eq(medicamentos.naAgenda, naAgenda));
+  const ordenados = db
+    .select({ medicamento: medicamentos, esquema: esquemas })
+    .from(medicamentos)
+    .innerJoin(esquemas, eq(esquemas.medicamentoId, medicamentos.id))
+    .where(and(...condicoes))
+    .all()
     .sort(
       (a, b) =>
         Number(b.medicamento.naAgenda) - Number(a.medicamento.naAgenda) ||
         a.medicamento.nome.localeCompare(b.medicamento.nome, 'pt-BR', { sensitivity: 'base' }),
     );
+  return ordenados.slice(deslocamento, limite === undefined ? undefined : deslocamento + limite);
+}
+
+/** Quantos medicamentos não removidos existem e quantos estão na agenda (cabeçalho e estado vazio da aba). */
+export function contarMedicamentos(db: AppDb): { total: number; naAgenda: number } {
+  const linha = db
+    .select({ total: count(), naAgenda: sql<number>`coalesce(sum(${medicamentos.naAgenda}), 0)` })
+    .from(medicamentos)
+    .where(isNull(medicamentos.deletedAt))
+    .get();
+  return { total: linha?.total ?? 0, naAgenda: Number(linha?.naAgenda ?? 0) };
 }

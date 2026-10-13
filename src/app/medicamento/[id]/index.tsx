@@ -6,7 +6,7 @@ import { Alert, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SeloEstoque } from '@/components/medicamento/selo-estoque';
-import { SeloForaDaAgenda } from '@/components/medicamento/selo-fora-da-agenda';
+import { Selo } from '@/components/medicamento/selo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
@@ -226,12 +226,8 @@ export default function DetalheMedicamentoScreen() {
             </ThemedText>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <ThemedText themeColor="textSecondary">{medicamento.dosagem}</ThemedText>
-              <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: theme.surfaceMuted }}>
-                <ThemedText type="caption" themeColor="textSecondary" style={{ fontFamily: FAMILIA_TEXTO[600] }}>
-                  Prioridade {medicamento.criticidade === 'especial' ? 'especial' : 'comum'}
-                </ThemedText>
-              </View>
-              {!medicamento.naAgenda ? <SeloForaDaAgenda /> : null}
+              <Selo texto={`Prioridade ${medicamento.criticidade === 'especial' ? 'especial' : 'comum'}`} />
+              {!medicamento.naAgenda ? <Selo texto="Fora da agenda" icone="calendario" /> : null}
             </View>
           </View>
 

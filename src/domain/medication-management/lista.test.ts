@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { createTestDb } from '@/db/create-test-db';
-import { listarMedicamentosComEsquema } from '@/db/repositories/medicamentos';
+import { contarMedicamentos, listarMedicamentosComEsquema } from '@/db/repositories/medicamentos';
 import { cadastrarMedicamento, retirarDaAgenda } from '@/domain/medication-registration/registration';
 
-import { filtrarEPaginar } from './lista';
+import { TAMANHO_PAGINA } from './lista';
 
 const agora = new Date(2026, 9, 12, 7);
 const cadastrar = (db: ReturnType<typeof createTestDb>, nome: string) =>
@@ -16,37 +16,44 @@ const cadastrar = (db: ReturnType<typeof createTestDb>, nome: string) =>
     },
     agora,
   ).medicamento.id;
+const nomes = (linhas: ReturnType<typeof listarMedicamentosComEsquema>) => linhas.map(({ medicamento }) => medicamento.nome);
 
 describe('listarMedicamentosComEsquema', () => {
-  it('fora da agenda vem por último, cada grupo em ordem alfabética', () => {
+  it('fora da agenda vem por último, cada grupo em ordem alfabética, com acentos como em português', () => {
+    const db = createTestDb();
+    cadastrar(db, 'Vitamina D');
+    retirarDaAgenda(db, cadastrar(db, 'Amoxicilina'), agora);
+    cadastrar(db, 'Losartana');
+    cadastrar(db, 'Ácido fólico');
+
+    expect(nomes(listarMedicamentosComEsquema(db))).toEqual(['Ácido fólico', 'Losartana', 'Vitamina D', 'Amoxicilina']);
+  });
+
+  it('os três filtros e a contagem', () => {
     const db = createTestDb();
     cadastrar(db, 'Vitamina D');
     retirarDaAgenda(db, cadastrar(db, 'Amoxicilina'), agora);
     cadastrar(db, 'Losartana');
 
-    expect(listarMedicamentosComEsquema(db).map(({ medicamento }) => medicamento.nome)).toEqual(['Losartana', 'Vitamina D', 'Amoxicilina']);
+    expect(nomes(listarMedicamentosComEsquema(db))).toEqual(['Losartana', 'Vitamina D', 'Amoxicilina']);
+    expect(nomes(listarMedicamentosComEsquema(db, { naAgenda: true }))).toEqual(['Losartana', 'Vitamina D']);
+    expect(nomes(listarMedicamentosComEsquema(db, { naAgenda: false }))).toEqual(['Amoxicilina']);
+    expect(contarMedicamentos(db)).toEqual({ total: 3, naAgenda: 2 });
+  });
+
+  it('45 medicamentos em páginas de 20: 20, 20 e 5', () => {
+    const db = createTestDb();
+    const todos = Array.from({ length: 45 }, (_, i) => `Remédio ${String(i).padStart(2, '0')}`);
+    todos.forEach((nome) => cadastrar(db, nome));
+
+    const paginas = [0, 1, 2].map((pagina) => nomes(listarMedicamentosComEsquema(db, { limite: TAMANHO_PAGINA, deslocamento: pagina * TAMANHO_PAGINA })));
+    expect(paginas.map((pagina) => pagina.length)).toEqual([20, 20, 5]);
+    expect(paginas.flat()).toEqual(todos);
   });
 });
 
-describe('filtrarEPaginar', () => {
-  const lista = [
-    { nome: 'Losartana', naAgenda: true },
-    { nome: 'Vitamina D', naAgenda: true },
-    { nome: 'Amoxicilina', naAgenda: false },
-  ];
-
-  it('os três filtros', () => {
-    expect(filtrarEPaginar(lista, 'todos', 1).itens.map((i) => i.nome)).toEqual(['Losartana', 'Vitamina D', 'Amoxicilina']);
-    expect(filtrarEPaginar(lista, 'na_agenda', 1).itens.map((i) => i.nome)).toEqual(['Losartana', 'Vitamina D']);
-    expect(filtrarEPaginar(lista, 'fora_da_agenda', 1).itens.map((i) => i.nome)).toEqual(['Amoxicilina']);
-  });
-
-  it('45 itens em páginas de 20: 20, 40 e 45', () => {
-    const muitos = Array.from({ length: 45 }, (_, i) => ({ nome: String(i), naAgenda: true }));
-    expect([1, 2, 3].map((pagina) => filtrarEPaginar(muitos, 'todos', pagina))).toEqual([
-      { itens: muitos.slice(0, 20), temMais: true },
-      { itens: muitos.slice(0, 40), temMais: true },
-      { itens: muitos, temMais: false },
-    ]);
+describe('contarMedicamentos', () => {
+  it('sem medicamentos é zero', () => {
+    expect(contarMedicamentos(createTestDb())).toEqual({ total: 0, naAgenda: 0 });
   });
 });

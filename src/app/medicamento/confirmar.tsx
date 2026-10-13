@@ -127,14 +127,15 @@ export default function ConfirmarCadastroScreen() {
         setAviso('Os horários mudaram desde que você abriu esta tela. Confira de novo.');
         return;
       }
-      adicionarAAgenda(db, modo.medicamentoId, novaPrevia.agora);
+      adicionarAAgenda(db, modo.medicamentoId, novaPrevia);
       aposSalvarMedicamento(dados!.comuns.criticidade);
       limpar();
       router.back();
       return;
     }
 
-    const novaPrevia = prepararCadastro(dados!, agoraConfirmacao);
+    // Só cadastrar descarta "Já estava tomando" — então nem o valida (fix-agenda-membership-review).
+    const novaPrevia = prepararCadastro(adicionarNaAgenda ? dados! : { ...dados!, emUso: undefined }, agoraConfirmacao);
     if (adicionarNaAgenda && assinatura(novaPrevia) !== assinatura(previa!)) {
       // O relógio andou e mudou o que seria gravado: mostra de novo em vez de salvar.
       definir(dados!, novaPrevia);

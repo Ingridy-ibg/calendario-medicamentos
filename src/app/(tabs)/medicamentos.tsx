@@ -1,10 +1,10 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SeloEstoque } from '@/components/medicamento/selo-estoque';
-import { SeloForaDaAgenda } from '@/components/medicamento/selo-fora-da-agenda';
+import { Selo } from '@/components/medicamento/selo';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
@@ -15,9 +15,9 @@ import { Tocavel } from '@/components/ui/tocavel';
 import { FAMILIA_TEXTO } from '@/constants/fontes';
 import { db } from '@/db/client';
 import { paraEsquemaDominio } from '@/db/repositories/esquemas';
-import { listarMedicamentosComEsquema } from '@/db/repositories/medicamentos';
+import { contarMedicamentos, listarMedicamentosComEsquema } from '@/db/repositories/medicamentos';
 import { resumirEsquema, situacaoCiclo, textoSituacaoCiclo } from '@/domain/medication-management/gestao';
-import { type FiltroAgenda, filtrarEPaginar } from '@/domain/medication-management/lista';
+import { type FiltroAgenda, naAgendaDoFiltro, TAMANHO_PAGINA } from '@/domain/medication-management/lista';
 import { type AlertaEstoque, alertaForte, alertaVisivelNaLista, textoAlertaEstoque } from '@/domain/medication-stock/alerta';
 import { textoEstoque } from '@/domain/medication-stock/caixas';
 import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
@@ -42,8 +42,10 @@ const OPCOES_FILTRO = [
   { valor: 'fora_da_agenda', rotulo: 'Fora da agenda' },
 ] as const;
 
-function montarLista(agora: Date): ItemLista[] {
-  return listarMedicamentosComEsquema(db).map(({ medicamento, esquema }) => {
+/** Busca e monta só uma página — resumo, situação e alerta de estoque saem apenas dos itens dela. */
+function montarPagina(filtro: FiltroAgenda, deslocamento: number, agora: Date): ItemLista[] {
+  const pagina = listarMedicamentosComEsquema(db, { naAgenda: naAgendaDoFiltro(filtro), limite: TAMANHO_PAGINA, deslocamento });
+  return pagina.map(({ medicamento, esquema }) => {
     const dominio = paraEsquemaDominio(esquema);
     return {
       id: medicamento.id,
@@ -59,30 +61,6 @@ function montarLista(agora: Date): ItemLista[] {
       naAgenda: medicamento.naAgenda,
     };
   });
-}
-
-function Selo({ texto, icone }: { texto: string; icone?: 'sinoDesligado' }) {
-  const theme = useTheme();
-  const cor = theme.textSecondary;
-  return (
-    <View
-      style={{
-        alignSelf: 'flex-start',
-        marginTop: 4,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        borderRadius: 999,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        backgroundColor: theme.surfaceMuted,
-      }}>
-      {icone ? <Icone nome={icone} cor={cor} tamanho={12} /> : null}
-      <ThemedText type="caption" style={{ color: cor, fontFamily: FAMILIA_TEXTO[600] }}>
-        {texto}
-      </ThemedText>
-    </View>
-  );
 }
 
 function LinhaMedicamento({ item, primeiro, ultimo }: { item: ItemLista; primeiro: boolean; ultimo: boolean }) {
@@ -141,10 +119,14 @@ function LinhaMedicamento({ item, primeiro, ultimo }: { item: ItemLista; primeir
             <SeloEstoque alerta={item.alerta} />
           </View>
         ) : null}
-        {item.silenciado ? <Selo texto="Silenciado" icone="sinoDesligado" /> : null}
+        {item.silenciado ? (
+          <View style={{ marginTop: 4 }}>
+            <Selo texto="Silenciado" icone="sinoDesligado" compacto />
+          </View>
+        ) : null}
         {!item.naAgenda ? (
           <View style={{ marginTop: 4 }}>
-            <SeloForaDaAgenda />
+            <Selo texto="Fora da agenda" icone="calendario" compacto />
           </View>
         ) : null}
       </View>
@@ -159,20 +141,28 @@ function LinhaMedicamento({ item, primeiro, ultimo }: { item: ItemLista; primeir
  */
 export default function MedicamentosScreen() {
   const theme = useTheme();
-  const [todos, setTodos] = useState<ItemLista[]>([]);
+  const [itens, setItens] = useState<ItemLista[]>([]);
+  const [contagem, setContagem] = useState({ total: 0, naAgenda: 0 });
   const [filtro, setFiltro] = useState<FiltroAgenda>('todos');
   const [filtroAberto, setFiltroAberto] = useState(false);
-  const [pagina, setPagina] = useState(1);
 
-  useFocusEffect(useCallback(() => setTodos(montarLista(new Date())), []));
+  // No foco e na troca de filtro, recomeça da primeira página.
+  useFocusEffect(
+    useCallback(() => {
+      setContagem(contarMedicamentos(db));
+      setItens(montarPagina(filtro, 0, new Date()));
+    }, [filtro]),
+  );
 
-  const { itens, temMais } = useMemo(() => filtrarEPaginar(todos, filtro, pagina), [todos, filtro, pagina]);
-  const naAgenda = todos.filter((item) => item.naAgenda).length;
+  const naAgenda = contagem.naAgenda;
+  const totalDoFiltro = filtro === 'todos' ? contagem.total : filtro === 'na_agenda' ? contagem.naAgenda : contagem.total - contagem.naAgenda;
+  const temMais = itens.length < totalDoFiltro;
   const filtroAplicado = filtro !== 'todos';
 
-  function escolherFiltro(novo: FiltroAgenda) {
-    setFiltro(novo);
-    setPagina(1);
+  function carregarMais() {
+    if (!temMais) return;
+    const proxima = montarPagina(filtro, itens.length, new Date());
+    if (proxima.length > 0) setItens((atuais) => [...atuais, ...proxima]);
   }
 
   const cabecalho = (
@@ -186,7 +176,7 @@ export default function MedicamentosScreen() {
             Medicamentos
           </ThemedText>
         </View>
-        {todos.length > 0 ? (
+        {contagem.total > 0 ? (
           <Tocavel
             accessibilityRole="button"
             accessibilityLabel={filtroAplicado ? 'Filtro aplicado. Mostrar opções de filtro' : 'Mostrar opções de filtro'}
@@ -213,12 +203,12 @@ export default function MedicamentosScreen() {
           style={{ borderRadius: 999, paddingLeft: 14, paddingRight: 18 }}
         />
       </View>
-      {filtroAberto ? <Segmentado opcoes={OPCOES_FILTRO} selecionado={filtro} onSelecionar={escolherFiltro} /> : null}
+      {filtroAberto ? <Segmentado opcoes={OPCOES_FILTRO} selecionado={filtro} onSelecionar={setFiltro} /> : null}
     </View>
   );
 
   const vazio =
-    todos.length === 0 ? (
+    contagem.total === 0 ? (
       <Cartao style={{ alignItems: 'center', paddingVertical: 32, gap: 14 }}>
         <Icone nome="pilula" cor={theme.textSecondary} tamanho={32} />
         <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
@@ -243,9 +233,7 @@ export default function MedicamentosScreen() {
           renderItem={({ item, index }) => <LinhaMedicamento item={item} primeiro={index === 0} ultimo={index === itens.length - 1} />}
           ListHeaderComponent={cabecalho}
           ListEmptyComponent={vazio}
-          onEndReached={() => {
-            if (temMais) setPagina((atual) => atual + 1);
-          }}
+          onEndReached={carregarMais}
           onEndReachedThreshold={0.5}
           contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
           contentInsetAdjustmentBehavior="automatic"

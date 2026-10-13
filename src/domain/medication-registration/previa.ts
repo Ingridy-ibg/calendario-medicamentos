@@ -18,6 +18,19 @@ export interface PlanoCadastro {
   primeiraDoseIntervalo: Date | null;
   /** Doses de hoje (horário previsto) informadas como já tomadas. */
   dosesTomadasHoje: Date[];
+  /** Volta à agenda: horários de hoje em diante que já têm dose resolvida no banco — não ganham dose nova. */
+  horariosJaResolvidos: Date[];
+}
+
+/**
+ * O que já está registrado de um medicamento que volta para a agenda
+ * (fix-agenda-membership-review, decisão 1): as doses de hoje já resolvidas
+ * e a última dose tomada, que no intervalo em horas define a próxima.
+ */
+export interface HistoricoDaVolta {
+  /** Doses resolvidas com horário de hoje em diante (uma dose pode ter sido tomada adiantada). */
+  resolvidas: { previsto: Date; tomada: boolean }[];
+  ultimaTomada: Date | null;
 }
 
 export interface PreviaCadastro {
@@ -87,10 +100,16 @@ function duracao(modo: { modo: 'continuo' } | { modo: 'dias'; dias: number }): n
   return modo.modo === 'continuo' ? null : modo.dias;
 }
 
-function resolverPlano(dados: DadosFormularioMedicamento, agora: Date): PlanoCadastro {
+function resolverPlano(dados: DadosFormularioMedicamento, agora: Date, historico: HistoricoDaVolta | null): PlanoCadastro {
   const emUso = dados.emUso?.dados;
   const hoje = startOfDay(agora);
-  const plano: PlanoCadastro = { dataInicio: null, dataInicioCiclo: null, primeiraDoseIntervalo: null, dosesTomadasHoje: [] };
+  const plano: PlanoCadastro = {
+    dataInicio: null,
+    dataInicioCiclo: null,
+    primeiraDoseIntervalo: null,
+    dosesTomadasHoje: [],
+    horariosJaResolvidos: historico?.resolvidas.map((dose) => dose.previsto) ?? [],
+  };
 
   if (emUso?.tipo === 'inicio') plano.dataInicio = startOfDay(emUso.dataInicio);
   if (emUso?.tipo === 'intervalo' && emUso.dataInicio) plano.dataInicio = startOfDay(emUso.dataInicio);
@@ -100,13 +119,14 @@ function resolverPlano(dados: DadosFormularioMedicamento, agora: Date): PlanoCad
   }
 
   if (dados.esquema.tipo === 'INTERVALO_HORAS') {
-    const ultimaDose = emUso?.tipo === 'intervalo' ? emUso.ultimaDose : null;
+    // Na volta à agenda a última dose vem do histórico e já está no banco.
+    const ultimaDose = emUso?.tipo === 'intervalo' ? emUso.ultimaDose : (historico?.ultimaTomada ?? null);
     plano.primeiraDoseIntervalo = gerarPrimeiraDoseIntervalo(
       { id: 'previa', medicamentoId: 'previa', tipo: 'INTERVALO_HORAS', intervaloHoras: dados.esquema.intervaloHoras, duracaoDias: null, dataInicio: agora },
       { agora, ultimaDose },
     ).dataHoraPrevista;
     // A última dose informada, se foi hoje, entra no histórico como tomada.
-    if (ultimaDose && isSameDay(ultimaDose, agora)) plano.dosesTomadasHoje = [ultimaDose];
+    if (emUso?.tipo === 'intervalo' && isSameDay(emUso.ultimaDose, agora)) plano.dosesTomadasHoje = [emUso.ultimaDose];
   }
 
   return plano;
@@ -115,10 +135,11 @@ function resolverPlano(dados: DadosFormularioMedicamento, agora: Date): PlanoCad
 /**
  * Prévia do cadastro (register-ongoing-medication): tudo o que a tela "Confira
  * antes de salvar" mostra e o plano que `cadastrarMedicamento` grava. Pura:
- * só depende dos dados do formulário e de `agora`.
+ * só depende dos dados do formulário, de `agora` e, na volta à agenda, do
+ * histórico já registrado.
  */
-export function montarPreviaCadastro(dados: DadosFormularioMedicamento, agora: Date): PreviaCadastro {
-  const plano = resolverPlano(dados, agora);
+export function montarPreviaCadastro(dados: DadosFormularioMedicamento, agora: Date, historico: HistoricoDaVolta | null = null): PreviaCadastro {
+  const plano = resolverPlano(dados, agora, historico);
   const esquema = esquemaDaPrevia(dados, plano, agora);
   const hoje = startOfDay(agora);
   const estoque = dados.comuns.quantidadeEmEstoque;
@@ -131,8 +152,10 @@ export function montarPreviaCadastro(dados: DadosFormularioMedicamento, agora: D
     );
   }
 
-  // Doses futuras (a grade gravada continua na janela rolante; ver `dosesFuturas`).
-  const futuras = dosesFuturas(esquema, agora, plano.primeiraDoseIntervalo);
+  // Doses futuras (a grade gravada continua na janela rolante; ver `dosesFuturas`),
+  // sem os horários que já têm dose resolvida (volta à agenda).
+  const jaResolvidos = new Set(plano.horariosJaResolvidos.map((dose) => dose.getTime()));
+  const futuras = dosesFuturas(esquema, agora, plano.primeiraDoseIntervalo).filter((dose) => !jaResolvidos.has(dose.getTime()));
 
   const primeiraDosePrevistaOriginal =
     esquema.tipo === 'INTERVALO_HORAS' && dados.emUso?.dados?.tipo === 'intervalo'
@@ -196,7 +219,12 @@ export function montarPreviaCadastro(dados: DadosFormularioMedicamento, agora: D
         : null,
       insuficiente,
     },
-    hoje: { tomadas: plano.dosesTomadasHoje, aAgendar: futuras.filter((dose) => isSameDay(dose, agora)) },
+    hoje: {
+      tomadas: historico
+        ? historico.resolvidas.filter((dose) => dose.tomada && isSameDay(dose.previsto, agora)).map((dose) => dose.previsto).sort((a, b) => a.getTime() - b.getTime())
+        : plano.dosesTomadasHoje,
+      aAgendar: futuras.filter((dose) => isSameDay(dose, agora)),
+    },
     diasSemRegistro,
     plano,
   };

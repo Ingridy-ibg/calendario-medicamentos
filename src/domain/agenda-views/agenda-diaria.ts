@@ -1,7 +1,7 @@
 import { addDays, startOfDay } from 'date-fns';
 
 import { contarDosesRegistradasNoIntervalo, listarDosesDoIntervalo } from '@/db/repositories/doses';
-import { listarEsquemasAtivos, paraEsquemaDominio } from '@/db/repositories/esquemas';
+import { listarEsquemasAtivos, listarEsquemasNaoRemovidos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { StatusDose } from '@/db/schema';
@@ -73,12 +73,17 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
   const inicioDoDia = startOfDay(hoje);
   const fimDoDia = addDays(inicioDoDia, 1);
 
+  // "Se necessário" e "aguardando nova cartela" só na agenda; as doses de hoje
+  // vêm de todo esquema não removido, para que as já resolvidas de um
+  // medicamento retirado da agenda continuem aparecendo, como no calendário
+  // (fix-agenda-membership-review). Retirar apaga as não resolvidas, então
+  // de um fora da agenda só sobram resolvidas.
   const esquemas = listarEsquemasAtivos(db);
-  const esquemasPorId = new Map(esquemas.map((esquema) => [esquema.id, esquema]));
+  const esquemasPorId = new Map(listarEsquemasNaoRemovidos(db).map((esquema) => [esquema.id, esquema]));
 
   // Um alerta por esquema (um esquema pode ter várias doses hoje); `hoje` é o "agora" de quem abre a agenda.
   const alertas = new Map<string, AlertaEstoque>();
-  const alertaDe = (linha: (typeof esquemas)[number], medicamento: { quantidadeEmEstoque: number; quantidadePorEmbalagem: number }) => {
+  const alertaDe = (linha: (typeof esquemas)[number], medicamento: { quantidadeEmEstoque: number; quantidadePorEmbalagem: number; naAgenda: boolean }) => {
     if (!alertas.has(linha.id)) {
       alertas.set(linha.id, alertaVisivelNaLista(alertaEstoqueDoMedicamento(db, paraEsquemaDominio(linha), medicamento, hoje)));
     }

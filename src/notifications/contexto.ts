@@ -80,11 +80,12 @@ export function listarAlvosDesejados(db: AppDb, agora: Date): AlvoNotificacao[] 
     ];
   });
 
+  // listarEsquemasCiclicos já traz só medicamentos não removidos e na agenda.
   const ciclos = listarEsquemasCiclicos(db).flatMap((esquemaRow) => {
     let medicamento = medicamentosPorId.get(esquemaRow.medicamentoId);
     if (!medicamento) {
       const encontrado = buscarMedicamentoPorId(db, esquemaRow.medicamentoId);
-      if (!encontrado || encontrado.deletedAt || !encontrado.naAgenda) return [];
+      if (!encontrado) return [];
       medicamento = encontrado;
       medicamentosPorId.set(esquemaRow.medicamentoId, medicamento);
     }
