@@ -28,6 +28,7 @@ const SIMBOLOS = {
   info: { ios: 'info.circle', android: 'info' },
   cadeado: { ios: 'lock', android: 'lock' },
   filtro: { ios: 'line.3.horizontal.decrease', android: 'filter_list' },
+  tocar: { ios: 'play.fill', android: 'play_arrow' },
 } as const satisfies Record<string, { ios: SFSymbol; android: AndroidSymbol }>;
 
 export type NomeIcone = keyof typeof SIMBOLOS;

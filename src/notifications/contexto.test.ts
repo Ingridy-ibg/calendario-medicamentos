@@ -29,6 +29,7 @@ describe('listarAlvosDesejados', () => {
       identifier: identificadorDose(dose.id),
       tipo: 'dose',
       dataHora: new Date(2026, 0, 10, 8, 0),
+      agendador: 'notificacoes',
     });
   });
 

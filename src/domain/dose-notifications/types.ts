@@ -22,23 +22,27 @@ export interface DoseParaNotificar {
 }
 
 /**
- * Um canal por estilo de apresentação (specs/dose-notifications): "comum" é
- * padrão, "especial" é crítico/estilo alarme, e o lembrete de pausa de ciclo
- * é sempre leve — mesmo para um cíclico especial (nunca usa o canal crítico).
- * `estoque-baixo` é o quarto canal citado em design.md (fase de estoque).
+ * Um canal por estilo de apresentação (specs/dose-notifications). O canal de
+ * um Android não muda depois de criado, por isso a vibração longa da dose
+ * comum veio num id novo, `dose_comum_v2` (alarme-tela-cheia, design.md,
+ * decisão 8). A dose especial não usa canal do `expo-notifications`: quem a
+ * apresenta é o alarme nativo, no canal `alarme_especial`, criado pelo
+ * módulo. O lembrete de pausa de ciclo é sempre leve, mesmo de um cíclico
+ * especial.
  */
 export const CANAIS_NOTIFICACAO = {
-  doseComum: 'dose-comum',
-  doseEspecialCritico: 'dose-especial-critico',
+  doseComum: 'dose_comum_v2',
+  alarmeEspecial: 'alarme_especial',
   pausaCiclo: 'pausa-ciclo',
   estoqueBaixo: 'estoque-baixo',
 } as const;
 export type CanalNotificacao = (typeof CANAIS_NOTIFICACAO)[keyof typeof CANAIS_NOTIFICACAO];
 
-/** Canal de uma notificação de dose (nunca do lembrete de pausa, que é sempre leve). */
-export function canalParaDose(criticidade: Criticidade): CanalNotificacao {
-  return criticidade === 'especial' ? CANAIS_NOTIFICACAO.doseEspecialCritico : CANAIS_NOTIFICACAO.doseComum;
-}
+/** Canais de versões anteriores, apagados na inicialização (alarme-tela-cheia). */
+export const CANAIS_REMOVIDOS = ['dose-comum', 'dose-especial-critico'] as const;
+
+/** Padrão de vibração da dose comum: quatro pulsos longos (specs/dose-notifications). */
+export const VIBRACAO_DOSE_COMUM = [0, 500, 250, 500, 250, 500, 250, 500];
 
 /**
  * Categorias de ação (`setNotificationCategoryAsync`), uma por conjunto de

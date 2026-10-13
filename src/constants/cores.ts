@@ -120,3 +120,67 @@ export const PALETAS_SAUDACAO = {
     noite: NOITE,
   },
 } satisfies Record<'light' | 'dark', Record<'manha' | 'tarde' | 'noite', PaletaSaudacao>>;
+
+/**
+ * Aparências da tela de alarme dos especiais (alarme-tela-cheia; canvas
+ * "Alarme da dose especial (tela cheia)"). Independem do tema do app: são
+ * escolhidas em "Alarme dos especiais", no Perfil.
+ */
+export interface PaletaAlarme {
+  fundo: string;
+  texto: string;
+  secundario: string;
+  cartao: string;
+  destaque: string;
+  onDestaque: string;
+  disco: string;
+  discoTexto: string;
+  borda: string;
+}
+
+export const PALETAS_ALARME = {
+  noite: {
+    fundo: '#0E1412',
+    texto: '#E8EEEB',
+    secundario: '#9DABA5',
+    cartao: '#18211E',
+    destaque: '#3FB89A',
+    onDestaque: '#0B1F1A',
+    disco: '#173A32',
+    discoTexto: '#7FE0C6',
+    borda: '#34413C',
+  },
+  verde: {
+    fundo: '#0E6B58',
+    texto: '#FFFFFF',
+    secundario: '#CFE9E1',
+    cartao: '#0A5446',
+    destaque: '#FFFFFF',
+    onDestaque: '#0A5446',
+    disco: '#0A5446',
+    discoTexto: '#FFFFFF',
+    borda: '#3E8C7A',
+  },
+  claro: {
+    fundo: '#F3F5F2',
+    texto: '#15211D',
+    secundario: '#4A5550',
+    cartao: '#FFFFFF',
+    destaque: '#0E6B58',
+    onDestaque: '#FFFFFF',
+    disco: '#DDEFE9',
+    discoTexto: '#0E6B58',
+    borda: '#CBD3CF',
+  },
+  aurora: {
+    fundo: '#1B1530',
+    texto: '#F4EFFF',
+    secundario: '#C2B8DA',
+    cartao: '#2A2245',
+    destaque: '#F2A541',
+    onDestaque: '#2A1A05',
+    disco: '#2A2245',
+    discoTexto: '#F2A541',
+    borda: '#4A3F6B',
+  },
+} satisfies Record<string, PaletaAlarme>;

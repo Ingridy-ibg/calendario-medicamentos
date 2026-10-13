@@ -16,7 +16,7 @@ describe('construirAlvosDeDoses', () => {
   it('gera um alvo por dose com notificações ativas', () => {
     const alvos = construirAlvosDeDoses([{ ...doseBase, doseId: 'd1' }]);
     expect(alvos).toEqual([
-      { identifier: identificadorDose('d1'), tipo: 'dose', dataHora: new Date(2026, 0, 10, 8, 0) },
+      { identifier: identificadorDose('d1'), tipo: 'dose', dataHora: new Date(2026, 0, 10, 8, 0), agendador: 'notificacoes' },
     ]);
   });
 
@@ -41,6 +41,14 @@ describe('construirAlvosDeDoses', () => {
       { ...doseBase, doseId: 'd1', criticidade: 'especial', notificacoesSemResposta: 20 },
     ]);
     expect(alvos).toHaveLength(1);
+  });
+
+  it('agenda o especial no alarme nativo e o comum no expo-notifications', () => {
+    const alvos = construirAlvosDeDoses([
+      { ...doseBase, doseId: 'd1', criticidade: 'especial' },
+      { ...doseBase, doseId: 'd2' },
+    ]);
+    expect(alvos.map((a) => a.agendador)).toEqual(['alarme', 'notificacoes']);
   });
 });
 
@@ -71,5 +79,6 @@ describe('construirAlvosDePausa', () => {
       new Date(2026, 0, 22),
     );
     expect(alvos.map((a) => a.identifier)).toEqual([identificadorPausaCiclo('e1', '2026-01-22')]);
+    expect(alvos[0].agendador).toBe('notificacoes');
   });
 });

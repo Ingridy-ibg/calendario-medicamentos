@@ -28,6 +28,8 @@ export function gerarLembretesDePausa(esquema: EsquemaCiclico, de: Date, ate: Da
         identifier: identificadorPausaCiclo(esquema.id, formatISO(dia, { representation: 'date' })),
         tipo: 'pausa-ciclo',
         dataHora: combinarDataEHorario(dia, horario),
+        // O lembrete de pausa é sempre leve, mesmo de um cíclico especial.
+        agendador: 'notificacoes',
       });
     }
     dia = addDays(dia, 1);

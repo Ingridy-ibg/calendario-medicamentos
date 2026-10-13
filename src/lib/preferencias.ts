@@ -3,6 +3,15 @@ import { Appearance } from 'react-native';
 import { create } from 'zustand';
 
 import {
+  CHAVES_ALARME,
+  gravarToqueAlarme,
+  lerLigadoPorPadrao,
+  lerTemaAlarme,
+  lerToqueAlarme,
+  type PreferenciasAlarme,
+  toqueParaNativo,
+} from '@/domain/preferencias/alarme';
+import {
   type Aparencia,
   CHAVES_PREFERENCIAS,
   deveExibirBoasVindas,
@@ -12,6 +21,8 @@ import {
   lerDataGuardada,
   normalizarNome,
 } from '@/domain/preferencias/preferencias';
+
+import { configurarAlarme } from './alarme-dose';
 
 /**
  * Preferências locais (design.md, decisões 5, 8 e 9): guardadas no
@@ -29,6 +40,9 @@ interface PreferenciasState {
   concluirBoasVindas: () => void;
   definirNome: (nome: string) => void;
   definirAparencia: (aparencia: Aparencia) => void;
+  /** Alarme dos especiais (alarme-tela-cheia): vale a partir do próximo alarme. */
+  alarme: PreferenciasAlarme;
+  definirAlarme: (mudanca: Partial<PreferenciasAlarme>) => void;
 }
 
 function lerItem(chave: string): string | null {
@@ -39,7 +53,21 @@ function lerItem(chave: string): string | null {
   }
 }
 
-export const usePreferencias = create<PreferenciasState>((set) => ({
+function lerPreferenciasAlarme(): PreferenciasAlarme {
+  return {
+    tema: lerTemaAlarme(lerItem(CHAVES_ALARME.tema)),
+    toque: lerToqueAlarme(lerItem(CHAVES_ALARME.toque)),
+    vibrar: lerLigadoPorPadrao(lerItem(CHAVES_ALARME.vibrar)),
+    crescente: lerLigadoPorPadrao(lerItem(CHAVES_ALARME.crescente)),
+  };
+}
+
+/** O serviço nativo não lê o kv-store: cada mudança é repassada a ele (design.md, decisão 6). */
+function repassarAoAlarme(alarme: PreferenciasAlarme): void {
+  configurarAlarme({ toque: toqueParaNativo(alarme.toque), vibrar: alarme.vibrar, crescente: alarme.crescente });
+}
+
+export const usePreferencias = create<PreferenciasState>((set, get) => ({
   boasVindasConcluida: !deveExibirBoasVindas(lerItem(CHAVES_PREFERENCIAS.boasVindasConcluida)),
   nome: normalizarNome(lerItem(CHAVES_PREFERENCIAS.nome)),
   aparencia: lerAparencia(lerItem(CHAVES_PREFERENCIAS.aparencia)),
@@ -68,7 +96,24 @@ export const usePreferencias = create<PreferenciasState>((set) => ({
     Appearance.setColorScheme(esquemaDaAparencia(aparencia));
     set({ aparencia });
   },
+
+  alarme: lerPreferenciasAlarme(),
+
+  definirAlarme: (mudanca) => {
+    const alarme = { ...get().alarme, ...mudanca };
+    Storage.setItemSync(CHAVES_ALARME.tema, alarme.tema);
+    Storage.setItemSync(CHAVES_ALARME.toque, gravarToqueAlarme(alarme.toque));
+    Storage.setItemSync(CHAVES_ALARME.vibrar, alarme.vibrar ? '1' : '0');
+    Storage.setItemSync(CHAVES_ALARME.crescente, alarme.crescente ? '1' : '0');
+    repassarAoAlarme(alarme);
+    set({ alarme });
+  },
 }));
+
+/** Na abertura do app, garante que o módulo nativo tem as preferências atuais. */
+export function sincronizarPreferenciasDoAlarme(): void {
+  repassarAoAlarme(usePreferencias.getState().alarme);
+}
 
 /** Lida no topo do layout raiz, antes de qualquer tela, para a splash já abrir no tema certo. */
 export function aplicarAparenciaSalva(): void {

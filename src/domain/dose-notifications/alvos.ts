@@ -3,7 +3,7 @@ import type { EsquemaCiclico } from '@/domain/dose-scheduling/types';
 
 import { precisaDeProximoAlarme } from './cascata';
 import { gerarLembretesDePausa } from './pausa-ciclo';
-import { type AlvoNotificacao, identificadorDose } from './reconciliador';
+import { agendadorParaDose, type AlvoNotificacao, identificadorDose } from './reconciliador';
 
 export interface DoseComContexto {
   doseId: string;
@@ -30,6 +30,7 @@ export function construirAlvosDeDoses(doses: DoseComContexto[]): AlvoNotificacao
       identifier: identificadorDose(dose.doseId),
       tipo: 'dose' as const,
       dataHora: dose.proximaNotificacaoEm,
+      agendador: agendadorParaDose(dose.criticidade),
     }));
 }
 

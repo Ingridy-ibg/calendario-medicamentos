@@ -3,6 +3,8 @@ import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import { getPermissionsAsync, requestPermissionsAsync } from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import { permissoesDoAlarme } from '@/lib/alarme-dose';
+
 /**
  * `POST_NOTIFICATIONS` (Android 13+) é a única permissão daqui pedida por um
  * diálogo padrão do sistema — as demais abaixo são permissões/telas que o
@@ -69,18 +71,17 @@ export async function solicitarPermissoesEssenciais(): Promise<void> {
 export interface SituacaoPermissoes {
   notificacoes: boolean;
   /**
-   * `null` quando não há como saber: o `expo-notifications` não expõe consulta
-   * de `SCHEDULE_EXACT_ALARM`, então do Android 13 em diante o perfil só
-   * oferece "Abrir configurações" (apply-visual-identity, design.md).
+   * Estado real, lido pelo módulo do alarme (`canScheduleExactAlarms` e
+   * `canUseFullScreenIntent` — alarme-tela-cheia, design.md, decisão 9).
+   * `null` só quando o módulo não existe neste build.
    */
   alarmeExato: boolean | null;
+  telaCheia: boolean | null;
 }
 
 /** Só consulta — nunca abre diálogo nem tela de Configurações (specs/user-profile). */
 export async function consultarPermissoes(): Promise<SituacaoPermissoes> {
   const { granted } = await getPermissionsAsync();
-  const versao = Number(Platform.Version);
-  // Abaixo da API 31 a permissão nem existe; nas APIs 31–32 vem concedida na instalação.
-  const alarmeExato = Platform.OS !== 'android' || versao < 33 ? true : null;
-  return { notificacoes: granted, alarmeExato };
+  if (Platform.OS !== 'android') return { notificacoes: granted, alarmeExato: true, telaCheia: true };
+  return { notificacoes: granted, ...permissoesDoAlarme() };
 }

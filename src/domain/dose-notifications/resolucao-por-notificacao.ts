@@ -91,6 +91,30 @@ export function registrarEntregaDeNotificacao(
   return decisao;
 }
 
+export interface DisparoDeAlarme {
+  doseId: string;
+  em: Date;
+}
+
+/**
+ * Sincroniza o banco com os disparos que o alarme nativo fez com o app
+ * fechado (alarme-tela-cheia, design.md, decisão 4): cada disparo conta como
+ * uma entrega, na ordem em que ocorreram, para que `proximaNotificacaoEm`
+ * alcance o rearme de +30 min que o nativo já armou. Disparos de dose já
+ * resolvida ou removida são ignorados.
+ */
+export function aplicarDisparosDeAlarme(db: AppDb, disparos: DisparoDeAlarme[]): void {
+  const ordenados = [...disparos].sort((a, b) => a.em.getTime() - b.em.getTime());
+  for (const disparo of ordenados) {
+    const dose = buscarDosePorId(db, disparo.doseId);
+    if (!dose || (dose.status !== 'pendente' && dose.status !== 'aguardando')) continue;
+    const esquemaRow = buscarEsquemaPorId(db, dose.esquemaId);
+    const medicamento = esquemaRow ? buscarMedicamentoPorId(db, esquemaRow.medicamentoId) : undefined;
+    if (!medicamento) continue;
+    registrarEntregaDeNotificacao(db, medicamento.criticidade, disparo.doseId, disparo.em);
+  }
+}
+
 /**
  * Varredura preguiçosa (chamada pelo reconciliador — a cada abertura do app e
  * periodicamente em segundo plano, ver `src/notifications/reconciliador.ts`):

@@ -13,6 +13,7 @@ import { isExpoGo } from '@/lib/expo-go';
 import { deveExibirSaudacao } from '@/domain/daily-greeting/saudacao';
 import { marcarPerdidasPorTempo } from '@/domain/adherence-history/perdidas';
 import { renovarJanelasAtivas } from '@/domain/dose-scheduling/janela-rolante';
+import { consumirAberturaPeloAlarme } from '@/lib/alarme-dose';
 import { consumirAberturaPorNotificacao } from '@/lib/notificacoes-seguras';
 import { aplicarAparenciaSalva, lerUltimaSaudacao, usePreferencias } from '@/lib/preferencias';
 
@@ -27,7 +28,8 @@ aplicarAparenciaSalva();
  * Saudação na primeira abertura comum do dia (specs/daily-greeting): avaliada
  * quando a navegação fica pronta (abertura a frio) e a cada volta ao primeiro
  * plano. Concluir a boas-vindas não dispara a avaliação, então o primeiro uso
- * nunca mostra a saudação.
+ * nunca mostra a saudação. Abrir pelo alarme de uma dose especial conta como
+ * abertura por notificação (alarme-tela-cheia, design.md, decisão 3).
  */
 function useSaudacaoDiaria(navegacaoPronta: boolean) {
   useEffect(() => {
@@ -38,7 +40,8 @@ function useSaudacaoDiaria(navegacaoPronta: boolean) {
         agora: new Date(),
         ultimaExibicao: lerUltimaSaudacao(),
         boasVindasConcluida: usePreferencias.getState().boasVindasConcluida,
-        abertoPorNotificacao: await consumirAberturaPorNotificacao(),
+        // Os dois são consumidos sempre, para não sobrar marca para a próxima abertura.
+        abertoPorNotificacao: [consumirAberturaPeloAlarme(), await consumirAberturaPorNotificacao()].some(Boolean),
       });
       if (exibir) router.push('/saudacao');
     }
@@ -122,7 +125,9 @@ export default function RootLayout() {
             options={{ presentation: 'formSheet', sheetAllowedDetents: 'fitToContents', sheetGrabberVisible: true }}
           />
           <Stack.Screen name="saudacao" options={{ animation: 'fade', gestureEnabled: false }} />
+          <Stack.Screen name="perfil/alarme" />
         </Stack.Protected>
+        <Stack.Screen name="alarme/[doseId]" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Protected guard={!boasVindasConcluida}>
           <Stack.Screen name="boas-vindas" options={{ gestureEnabled: false }} />
         </Stack.Protected>

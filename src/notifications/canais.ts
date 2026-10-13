@@ -1,41 +1,33 @@
 import {
   AndroidImportance,
   AndroidNotificationVisibility,
+  deleteNotificationChannelAsync,
   setNotificationChannelAsync,
 } from 'expo-notifications';
 
-import { CANAIS_NOTIFICACAO } from '@/domain/dose-notifications/types';
+import { CANAIS_NOTIFICACAO, CANAIS_REMOVIDOS, VIBRACAO_DOSE_COMUM } from '@/domain/dose-notifications/types';
 
 /**
  * Um canal por estilo de notificação (obrigatório desde o Android 8), para
  * que o usuário possa silenciar cada tipo de forma independente
- * (design.md). `doseEspecialCritico` usa MAX + bypassDnd para chegar o mais
- * perto possível de um estilo "alarme" dentro do que o Android permite via
- * canal — a apresentação de fato como full-screen intent depende também da
- * permissão declarada em app.json e é resolvida pelo SO a partir dela, não
- * há um campo equivalente na API JS do expo-notifications (ver `permissoes.ts`).
+ * (design.md). A dose especial não tem canal aqui: ela é um alarme nativo em
+ * tela cheia, no canal `alarme_especial` criado pelo módulo `alarme-dose`
+ * (alarme-tela-cheia, design.md, decisão 8). Os canais de versões anteriores
+ * são apagados, para não aparecerem nas Configurações.
  */
 export async function configurarCanaisAndroid(): Promise<void> {
+  for (const id of CANAIS_REMOVIDOS) {
+    await deleteNotificationChannelAsync(id);
+  }
+
   await setNotificationChannelAsync(CANAIS_NOTIFICACAO.doseComum, {
     name: 'Doses',
     description: 'Lembretes de dose de medicamentos comuns.',
     importance: AndroidImportance.HIGH,
     sound: 'default',
     enableVibrate: true,
-    vibrationPattern: [0, 250, 250, 250],
+    vibrationPattern: VIBRACAO_DOSE_COMUM,
     lockscreenVisibility: AndroidNotificationVisibility.PUBLIC,
-    showBadge: true,
-  });
-
-  await setNotificationChannelAsync(CANAIS_NOTIFICACAO.doseEspecialCritico, {
-    name: 'Doses críticas',
-    description: 'Lembretes de dose de medicamentos especiais — estilo alarme, difícil de ignorar.',
-    importance: AndroidImportance.MAX,
-    sound: 'default',
-    enableVibrate: true,
-    vibrationPattern: [0, 500, 250, 500, 250, 500, 250, 500],
-    lockscreenVisibility: AndroidNotificationVisibility.PUBLIC,
-    bypassDnd: true,
     showBadge: true,
   });
 

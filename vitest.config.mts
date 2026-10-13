@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   resolve: {
@@ -10,5 +10,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Worktrees de outras changes (.claude/worktrees) têm a própria suíte.
+    exclude: [...configDefaults.exclude, '.claude/**'],
   },
 });

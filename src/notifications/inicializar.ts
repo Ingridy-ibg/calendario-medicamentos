@@ -1,6 +1,7 @@
 import { addNotificationResponseReceivedListener } from 'expo-notifications';
 
 import { db } from '@/db/client';
+import { sincronizarPreferenciasDoAlarme } from '@/lib/preferencias';
 
 import { configurarCanaisAndroid } from './canais';
 import { configurarCategoriasAcao } from './categorias';
@@ -23,6 +24,10 @@ let ouvindoRespostas = false;
  */
 export async function inicializarNotificacoes(): Promise<void> {
   configurarComportamentoEmPrimeiroPlano();
+  sincronizarPreferenciasDoAlarme();
+  // Também apaga os canais antigos (alarme-tela-cheia). As doses especiais que
+  // versões anteriores agendaram no expo-notifications saem na reconciliação
+  // abaixo: não são desejadas lá, só no alarme nativo, que as recria.
   await configurarCanaisAndroid();
   await configurarCategoriasAcao();
   // A tarefa de fundo só recebe as ações com o app em segundo plano ou

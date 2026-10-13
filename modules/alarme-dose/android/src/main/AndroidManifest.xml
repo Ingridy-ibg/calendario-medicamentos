@@ -1,0 +1,38 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Alarme em tela cheia das doses especiais (alarme-tela-cheia, design.md).
+    Este manifest é mesclado no do app no build, então dispensa um plugin de
+    config: permissões, receivers e serviço entram sozinhos. O "aparecer sobre
+    o bloqueio" da Activity é ligado em tempo de execução, só quando ela é
+    aberta por um alarme (AlarmeActivityListener).
+  -->
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <application>
+    <receiver
+      android:name="expo.modules.alarmedose.AlarmeReceiver"
+      android:exported="false" />
+
+    <receiver
+      android:name="expo.modules.alarmedose.BootReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
+
+    <service
+      android:name="expo.modules.alarmedose.AlarmeService"
+      android:exported="false"
+      android:foregroundServiceType="mediaPlayback" />
+  </application>
+</manifest>

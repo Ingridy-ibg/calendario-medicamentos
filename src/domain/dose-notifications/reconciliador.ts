@@ -1,4 +1,17 @@
+import type { Criticidade } from '@/db/schema';
+
 export type TipoAlvoNotificacao = 'dose' | 'pausa-ciclo';
+
+/**
+ * Quem agenda o alvo no aparelho (alarme-tela-cheia, design.md, decisão 4):
+ * `notificacoes` é o `expo-notifications` (dose comum e lembrete de pausa);
+ * `alarme` é o módulo nativo de alarme em tela cheia (dose especial).
+ */
+export type TipoAgendador = 'notificacoes' | 'alarme';
+
+export function agendadorParaDose(criticidade: Criticidade): TipoAgendador {
+  return criticidade === 'especial' ? 'alarme' : 'notificacoes';
+}
 
 export interface AlvoNotificacao {
   /**
@@ -10,15 +23,18 @@ export interface AlvoNotificacao {
   identifier: string;
   tipo: TipoAlvoNotificacao;
   dataHora: Date;
+  agendador: TipoAgendador;
 }
 
 export interface NotificacaoAgendadaNoSistema {
   identifier: string;
+  agendador: TipoAgendador;
 }
 
 export interface PlanoReconciliacao {
   agendar: AlvoNotificacao[];
-  cancelar: string[];
+  /** O que cancelar, e em qual agendador. */
+  cancelar: NotificacaoAgendadaNoSistema[];
 }
 
 const PREFIXO_DOSE = 'dose:';
@@ -54,8 +70,8 @@ export function analisarIdentificador(identifier: string): IdentificadorAnalisad
 
 /**
  * Compara o que deveria estar agendado (`desejados`, derivado do estado atual
- * do banco) contra o que de fato está agendado no SO, e produz um plano de
- * diffs. Função pura — só orquestra `expo-notifications` a partir daqui é que
+ * do banco) contra o que de fato está agendado no SO, nos dois agendadores,
+ * e produz um plano de diffs. Função pura — só orquestra `expo-notifications` a partir daqui é que
  * a camada de plataforma (`src/notifications`) aplica o plano de fato.
  *
  * `agendar` sempre inclui TODOS os desejados, mesmo que o identifier já
@@ -72,15 +88,21 @@ export function analisarIdentificador(identifier: string): IdentificadorAnalisad
  * "exatamente uma notificação por dose ativa" a partir da tabela `doses` é o
  * mesmo cálculo nos dois casos, independentemente do motivo que zerou os
  * alarmes do SO.
+ *
+ * Um id é cancelado em cada agendador em que não está desejado: quando a
+ * criticidade de um medicamento muda (comum ↔ especial), o identificador da
+ * dose continua o mesmo, mas o alvo troca de agendador, e o antigo sai do
+ * outro (alarme-tela-cheia, design.md, decisão 4).
  */
 export function planejarReconciliacao(
   desejados: AlvoNotificacao[],
   agendadosNoSistema: NotificacaoAgendadaNoSistema[],
 ): PlanoReconciliacao {
   const desejadosPorId = new Map(desejados.map((alvo) => [alvo.identifier, alvo]));
-  const agendadosIds = new Set(agendadosNoSistema.map((n) => n.identifier));
 
-  const cancelar = [...agendadosIds].filter((id) => pertenceAoApp(id) && !desejadosPorId.has(id));
+  const cancelar = agendadosNoSistema.filter(
+    (n) => pertenceAoApp(n.identifier) && desejadosPorId.get(n.identifier)?.agendador !== n.agendador,
+  );
 
   return { agendar: desejados, cancelar };
 }

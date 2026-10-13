@@ -9,7 +9,7 @@ import Storage from 'expo-sqlite/kv-store';
 import * as TaskManager from 'expo-task-manager';
 
 import { db } from '@/db/client';
-import { analisarIdentificador } from '@/domain/dose-notifications/reconciliador';
+import { agendadorParaDose, analisarIdentificador } from '@/domain/dose-notifications/reconciliador';
 import {
   aplicarRespostaDeNotificacao,
   registrarEntregaDeNotificacao,
@@ -90,7 +90,12 @@ export async function processarResposta(response: NotificationResponse): Promise
   if (resultado.tipo === 'resolvida') {
     await cancelarAlvo(identifier);
   } else if (resultado.tipo === 'adiada') {
-    await agendarAlvo(db, { identifier, tipo: 'dose', dataHora: resultado.proximaNotificacaoEm });
+    await agendarAlvo(db, {
+      identifier,
+      tipo: 'dose',
+      dataHora: resultado.proximaNotificacaoEm,
+      agendador: agendadorParaDose(contexto.medicamento.criticidade),
+    });
   }
   if (resultado.tipo !== 'ignorada') useDadosStore.getState().avisarDadosMudaram();
 }
@@ -116,7 +121,12 @@ async function processarEntrega(payload: Exclude<NotificationTaskPayload, Notifi
 
   const decisao = registrarEntregaDeNotificacao(db, contexto.medicamento.criticidade, doseId, agora);
   if (decisao.agendarProximoAlarme) {
-    await agendarAlvo(db, { identifier, tipo: 'dose', dataHora: decisao.proximaNotificacaoEm });
+    await agendarAlvo(db, {
+      identifier,
+      tipo: 'dose',
+      dataHora: decisao.proximaNotificacaoEm,
+      agendador: agendadorParaDose(contexto.medicamento.criticidade),
+    });
   }
 }
 

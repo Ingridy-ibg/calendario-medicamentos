@@ -1,6 +1,6 @@
 ## 1. Módulo nativo: base e spike
 
-- [ ] 1.1 Criar o módulo local `modules/alarme-dose` com `npx create-expo-module --local` (conferir a doc do SDK 57) e um plugin de config que declara as permissões, receivers e serviço, e o `showWhenLocked` da Activity. Verificar: `npx expo prebuild --clean` gera o manifest com os elementos novos
+- [x] 1.1 Criar o módulo local `modules/alarme-dose` com `npx create-expo-module --local` (conferir a doc do SDK 57) e um plugin de config que declara as permissões, receivers e serviço, e o `showWhenLocked` da Activity. Verificar: `npx expo prebuild --clean` gera o manifest com os elementos novos
 - [ ] 1.2 Spike: implementar `agendar`, o `AlarmeReceiver` e o `AlarmeService` com som em loop (USAGE_ALARM) e notificação com full-screen intent, e testar num APK com o aparelho bloqueado e no modo silencioso. Verificar: o alarme acende a tela e toca. Registrar no PR a versão do Android testada
 - [ ] 1.3 Implementar `cancelar`, `silenciar`, `listarAgendados` e a persistência em SharedPreferences. Verificar: agendar dois alarmes, cancelar um e `listarAgendados()` retornar só o outro
 - [ ] 1.4 Implementar o rearme +30 min no receiver e o log consumido por `consumirDisparos()`. Verificar: com o app fechado, um alarme ignorado dispara de novo 30 min depois, e `consumirDisparos()` retorna os dois disparos
@@ -12,15 +12,15 @@
 
 ## 2. Agendamento e reconciliação
 
-- [ ] 2.1 Extrair a interface `Agendador` com as implementações `expo-notifications` e alarme nativo, e fazer `agendarAlvo`/`cancelarAlvo` escolherem pela criticidade. Verificar: `npx tsc --noEmit` passa
-- [ ] 2.2 Ajustar `planejarReconciliacao` (domínio) para planejar por agendador, cancelando um id no agendador errado quando a criticidade muda. Verificar: novos testes no vitest para comum→especial e especial→comum
-- [ ] 2.3 Fazer o reconciliador começar consumindo `consumirDisparos()` e aplicando `registrarEntregaDeNotificacao` a cada disparo. Verificar: teste com um log de 2 disparos deixando `proximaNotificacaoEm` = último + 30 min
+- [x] 2.1 Extrair a interface `Agendador` com as implementações `expo-notifications` e alarme nativo, e fazer `agendarAlvo`/`cancelarAlvo` escolherem pela criticidade. Verificar: `npx tsc --noEmit` passa
+- [x] 2.2 Ajustar `planejarReconciliacao` (domínio) para planejar por agendador, cancelando um id no agendador errado quando a criticidade muda. Verificar: novos testes no vitest para comum→especial e especial→comum
+- [x] 2.3 Fazer o reconciliador começar consumindo `consumirDisparos()` e aplicando `registrarEntregaDeNotificacao` a cada disparo. Verificar: teste com um log de 2 disparos deixando `proximaNotificacaoEm` = último + 30 min
 - [ ] 2.4 Canais: criar `dose_comum_v2` com o padrão longo, apagar `doseComum` e `doseEspecialCritico`, e atualizar `CANAIS_NOTIFICACAO`. Verificar: em Configurações > Apps > Tomei > Notificações aparecem só os canais novos, e a dose comum vibra em 4 pulsos
 - [ ] 2.5 Na inicialização, cancelar no `expo-notifications` as notificações de doses especiais remanescentes (migração). Verificar: depois de atualizar o APK, `getAllScheduledNotificationsAsync` não tem doses especiais e `listarAgendados()` tem
 
 ## 3. Tela de alarme
 
-- [ ] 3.1 Adicionar as paletas Noite/Verde/Claro/Aurora em `src/constants/cores.ts` (valores do canvas) e as preferências `alarme.*` em `src/lib/preferencias.ts`, chamando `configurar` a cada mudança. Verificar: teste das funções puras de preferência (leitura com padrão)
+- [x] 3.1 Adicionar as paletas Noite/Verde/Claro/Aurora em `src/constants/cores.ts` (valores do canvas) e as preferências `alarme.*` em `src/lib/preferencias.ts`, chamando `configurar` a cada mudança. Verificar: teste das funções puras de preferência (leitura com padrão)
 - [ ] 3.2 Criar a rota `alarme/[doseId]` (fullScreenModal, fora das abas) conforme o artboard: hora, nome, dosagem, card de observação condicional, "Tomei agora" e "Silenciar som". Verificar: o deep link `calendariomedicamentos://alarme/<id>` abre a tela com os dados certos
 - [ ] 3.3 "Tomei agora" confirma pela função idempotente, chama `cancelar(id)` e mostra "Dose registrada"; `acao=tomei` no link confirma direto; "Silenciar som" chama `silenciar(id)`. Verificar: no aparelho, confirmar para o som e a dose aparece tomada na agenda; silenciar mantém pendente
 - [ ] 3.4 Impedir a saudação diária quando a abertura vem do alarme. Verificar: abrir pelo alarme de manhã não mostra a saudação
@@ -34,5 +34,5 @@
 
 ## 5. Validação
 
-- [ ] 5.1 Rodar `npx vitest run` e `npx tsc --noEmit`. Verificar: ambos passam
+- [x] 5.1 Rodar `npx vitest run` e `npx tsc --noEmit`. Verificar: ambos passam
 - [ ] 5.2 Gerar o APK e testar no aparelho os cenários da spec: bloqueado, em uso, modo silencioso, sem permissão de tela cheia, ignorar por 5 min, silenciar, reinício, comum vibrando e personalização. Verificar: checklist anexado ao PR

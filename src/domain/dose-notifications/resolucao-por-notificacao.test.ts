@@ -10,6 +10,7 @@ import type { EsquemaDiario } from '@/domain/dose-scheduling/types';
 
 import {
   adiarDoseViaNotificacao,
+  aplicarDisparosDeAlarme,
   aplicarRespostaDeNotificacao,
   fecharDosesVencidas,
   registrarEntregaDeNotificacao,
@@ -187,5 +188,37 @@ describe('aplicarRespostaDeNotificacao (fix-permissoes-e-respostas)', () => {
       aplicarRespostaDeNotificacao(db, esquema, 'especial', dose.id, 'nao_tomar', new Date(2026, 0, 1, 8, 5)),
     ).toEqual({ tipo: 'ignorada' });
     expect(buscarDosePorId(db, dose.id)!.status).toBe('pendente');
+  });
+});
+
+describe('aplicarDisparosDeAlarme (alarme-tela-cheia)', () => {
+  let db: TestDb;
+  beforeEach(() => (db = createTestDb()));
+
+  it('conta cada disparo como entrega e deixa a próxima notificação 30 min após o último', () => {
+    const { dose } = criarDose(db, 'especial');
+
+    aplicarDisparosDeAlarme(db, [
+      { doseId: dose.id, em: new Date(2026, 0, 1, 8, 30) },
+      { doseId: dose.id, em: new Date(2026, 0, 1, 8, 0) },
+    ]);
+
+    const atual = buscarDosePorId(db, dose.id)!;
+    expect(atual.notificacoesSemResposta).toBe(2);
+    expect(atual.proximaNotificacaoEm).toEqual(new Date(2026, 0, 1, 9, 0));
+  });
+
+  it('ignora disparos de uma dose já confirmada', () => {
+    const { dose, esquema } = criarDose(db, 'especial');
+    confirmarDose(db, esquema, dose.id, new Date(2026, 0, 1, 8, 5));
+    const antes = buscarDosePorId(db, dose.id)!;
+
+    aplicarDisparosDeAlarme(db, [{ doseId: dose.id, em: new Date(2026, 0, 1, 8, 30) }]);
+
+    expect(buscarDosePorId(db, dose.id)).toEqual(antes);
+  });
+
+  it('ignora disparos de uma dose removida', () => {
+    expect(() => aplicarDisparosDeAlarme(db, [{ doseId: 'nao-existe', em: new Date() }])).not.toThrow();
   });
 });
