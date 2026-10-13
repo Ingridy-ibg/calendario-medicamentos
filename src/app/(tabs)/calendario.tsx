@@ -27,6 +27,7 @@ import { db } from '@/db/client';
 import { type DiaCalendario, type ItemDiaCalendario, montarCalendarioMensal } from '@/domain/agenda-views/calendario-mensal';
 import { type MarcadorDia, marcadorDoDia } from '@/domain/agenda-views/marcador-dia';
 import { useTheme } from '@/hooks/use-theme';
+import { Tocavel } from '@/components/ui/tocavel';
 
 const ROTULOS_DIA_SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
@@ -133,21 +134,20 @@ export default function CalendarioMensalScreen() {
   );
 
   const botaoMes = (rotulo: string, icone: 'voltar' | 'avancar', aoTocar: () => void) => (
-    <Pressable
+    <Tocavel
       accessibilityRole="button"
       accessibilityLabel={rotulo}
       onPress={aoTocar}
-      style={({ pressed }) => ({
+      style={{
         width: 44,
         height: 44,
         borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: theme.surface,
-        opacity: pressed ? 0.7 : 1,
-      })}>
+      }}>
       <Icone nome={icone} cor={theme.text} tamanho={22} />
-    </Pressable>
+    </Tocavel>
   );
 
   return (

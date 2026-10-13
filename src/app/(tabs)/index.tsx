@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -32,6 +32,7 @@ import { inicialDoNome } from '@/domain/preferencias/preferencias';
 import { useTheme } from '@/hooks/use-theme';
 import { reconciliarNotificacoesSeDisponivel } from '@/lib/notificacoes-seguras';
 import { usePreferencias } from '@/lib/preferencias';
+import { Tocavel } from '@/components/ui/tocavel';
 
 function esquemaDominioOuFalha(esquemaId: string) {
   const linha = buscarEsquemaPorId(db, esquemaId);
@@ -71,25 +72,24 @@ function BotaoPerfil() {
   const theme = useTheme();
   const inicial = inicialDoNome(usePreferencias((estado) => estado.nome));
   return (
-    <Pressable
+    <Tocavel
       accessibilityRole="button"
       accessibilityLabel="Meu perfil"
       onPress={() => router.push('/perfil')}
-      style={({ pressed }) => ({
+      style={{
         width: 44,
         height: 44,
         borderRadius: 22,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: theme.accentSoft,
-        opacity: pressed ? 0.7 : 1,
-      })}>
+      }}>
       {inicial ? (
         <ThemedText style={{ color: theme.onAccentSoft, fontFamily: FAMILIA_TEXTO[700], fontSize: 17 }}>{inicial}</ThemedText>
       ) : (
         <Icone nome="pessoa" cor={theme.onAccentSoft} tamanho={22} />
       )}
-    </Pressable>
+    </Tocavel>
   );
 }
 

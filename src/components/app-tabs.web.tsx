@@ -6,10 +6,11 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
-import { Pressable, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
+import { Tocavel } from './ui/tocavel';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 
@@ -31,9 +32,10 @@ export default function AppTabs() {
   );
 }
 
-export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+// `style` pode vir como função do TabTrigger; o Tocavel só aceita objeto (fix-pressable-styles).
+export function TabButton({ children, isFocused, style: _style, ...props }: TabTriggerSlotProps) {
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
+    <Tocavel {...props} estiloPressionado={styles.pressed}>
       <ThemedView
         type={isFocused ? 'accentSoft' : 'surface'}
         style={styles.tabButtonView}>
@@ -41,7 +43,7 @@ export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps
           {children}
         </ThemedText>
       </ThemedView>
-    </Pressable>
+    </Tocavel>
   );
 }
 

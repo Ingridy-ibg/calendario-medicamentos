@@ -21,6 +21,7 @@ import type { DadosEsquemaFormulario, ModoDuracao } from '@/domain/medication-re
 import type { ErrosValidacao } from '@/domain/medication-registration/validation';
 import { useTheme } from '@/hooks/use-theme';
 import { isExpoGo } from '@/lib/expo-go';
+import { Tocavel } from '@/components/ui/tocavel';
 
 const ROTULOS_TIPO: Record<TipoEsquema, string> = {
   DIARIO: 'Diário',
@@ -82,10 +83,10 @@ function SecaoFormulario({ titulo, children }: { titulo: string; children: React
 function ChipAdicionar({ rotulo, onPress }: { rotulo: string; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <Pressable
+    <Tocavel
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => ({
+      style={{
         minHeight: 44,
         flexDirection: 'row',
         alignItems: 'center',
@@ -95,13 +96,12 @@ function ChipAdicionar({ rotulo, onPress }: { rotulo: string; onPress: () => voi
         borderWidth: 1.5,
         borderStyle: 'dashed',
         borderColor: theme.textSecondary,
-        opacity: pressed ? 0.7 : 1,
-      })}>
+      }}>
       <Icone nome="mais" cor={theme.accent} tamanho={18} />
       <ThemedText type="smallBold" themeColor="accent">
         {rotulo}
       </ThemedText>
-    </Pressable>
+    </Tocavel>
   );
 }
 

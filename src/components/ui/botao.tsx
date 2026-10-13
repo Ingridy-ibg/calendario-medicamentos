@@ -1,4 +1,4 @@
-import { Pressable, type PressableProps, type StyleProp, View, type ViewStyle } from 'react-native';
+import { type PressableProps, type StyleProp, View, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { FAMILIA_TEXTO } from '@/constants/fontes';
@@ -6,6 +6,7 @@ import type { ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { Icone, type NomeIcone } from './icone';
+import { Tocavel } from './tocavel';
 
 export type VarianteBotao = 'primario' | 'secundario' | 'suave' | 'perigo';
 
@@ -42,11 +43,11 @@ export function Botao({
   const elementoIcone = icone ? <Icone nome={icone} cor={corTexto} tamanho={18} /> : null;
 
   return (
-    <Pressable
+    <Tocavel
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
-      style={({ pressed }) => [
+      style={[
         {
           minHeight: tamanho === 'grande' ? 54 : 44,
           borderRadius: tamanho === 'grande' ? 16 : 12,
@@ -56,7 +57,6 @@ export function Botao({
           backgroundColor: disabled ? theme.surfaceMuted : cores.fundo ? theme[cores.fundo] : 'transparent',
           borderWidth: cores.borda && !disabled ? 1.5 : 0,
           borderColor: cores.borda ? theme[cores.borda] : undefined,
-          opacity: pressed ? 0.8 : 1,
         },
         style,
       ]}
@@ -68,6 +68,6 @@ export function Botao({
         </ThemedText>
         {iconeDepois && elementoIcone}
       </View>
-    </Pressable>
+    </Tocavel>
   );
 }

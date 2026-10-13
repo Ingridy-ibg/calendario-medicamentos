@@ -16,6 +16,7 @@ import { resumirDia } from '@/domain/agenda-views/resumo-dia';
 import { type Periodo, periodoDoDia, resumoSaudacao, textoSaudacao } from '@/domain/daily-greeting/saudacao';
 import { useTheme } from '@/hooks/use-theme';
 import { gravarUltimaSaudacao, usePreferencias } from '@/lib/preferencias';
+import { Tocavel } from '@/components/ui/tocavel';
 
 const DURACAO_MS = 2500;
 
@@ -151,19 +152,18 @@ export default function SaudacaoScreen() {
         </View>
 
         <View style={{ paddingHorizontal: 28, paddingBottom: 32, gap: 14 }}>
-          <Pressable
+          <Tocavel
             accessibilityRole="button"
             onPress={() => router.replace('/')}
-            style={({ pressed }) => ({
+            style={{
               minHeight: 54,
               borderRadius: 16,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: theme.accent,
-              opacity: pressed ? 0.8 : 1,
-            })}>
+            }}>
             <ThemedText style={{ color: theme.onAccent, fontFamily: FAMILIA_TEXTO[700] }}>Ver agenda</ThemedText>
-          </Pressable>
+          </Tocavel>
           {leitorDeTela === false ? (
             <View style={{ alignItems: 'center', gap: 8 }} importantForAccessibility="no-hide-descendants">
               <View style={{ width: 64, height: 4, borderRadius: 2, overflow: 'hidden', backgroundColor: paleta.halo }}>
