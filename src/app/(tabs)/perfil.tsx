@@ -180,7 +180,7 @@ export default function PerfilScreen() {
 
           <View style={{ alignItems: 'center', gap: 4, paddingTop: 4 }}>
             <ThemedText type="caption" themeColor="textSecondary">
-              Versão {Constants.expoConfig?.version ?? '—'}
+              Tomei · versão {Constants.expoConfig?.version ?? '—'}
             </ThemedText>
           </View>
         </ScrollView>

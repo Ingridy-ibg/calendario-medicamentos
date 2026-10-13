@@ -16,6 +16,7 @@ const comuns = {
   quantidadeEmEstoque: 42,
   quantidadePorEmbalagem: 30,
   emCaixas: { caixasFechadas: 1, naCaixaEmUso: 12 },
+  observacoes: 'Tomar em jejum',
 };
 
 const casos: [string, DadosFormularioMedicamento][] = [

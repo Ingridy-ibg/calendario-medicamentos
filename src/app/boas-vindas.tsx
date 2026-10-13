@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +9,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
 import { CampoTexto } from '@/components/ui/campo-texto';
 import { Icone, type NomeIcone } from '@/components/ui/icone';
-import { FAMILIA_TEXTO } from '@/constants/fontes';
+import { FAMILIA_TEXTO, FAMILIA_TITULO } from '@/constants/fontes';
 import { useTheme } from '@/hooks/use-theme';
 import { isExpoGo } from '@/lib/expo-go';
 import { usePreferencias } from '@/lib/preferencias';
@@ -98,12 +99,18 @@ function EtapaApresentacao({ aoAvancar }: { aoAvancar: () => void }) {
             borderWidth: 10,
             borderColor: '#15211D',
           }}>
-          <Icone nome="pilula" cor={theme.onAccent} tamanho={56} />
+          {/* Glifo do logo (cápsula com metade preenchida), o mesmo do ícone do app. */}
+          <Image source={require('@/assets/images/splash-icon.png')} style={{ width: 92, height: 92 }} />
         </View>
       </View>
 
       <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
         <ScrollView contentContainerStyle={{ padding: 28, paddingTop: 32, gap: 14 }}>
+          <ThemedText
+            accessibilityLabel="Tomei"
+            style={{ fontFamily: FAMILIA_TITULO[700], fontSize: 22, lineHeight: 24, letterSpacing: -0.4, color: theme.accent }}>
+            tomei<ThemedText style={{ fontFamily: FAMILIA_TITULO[700], fontSize: 22, lineHeight: 24, color: '#3FB89A' }}>.</ThemedText>
+          </ThemedText>
           <ThemedText type="display" accessibilityRole="header" style={{ fontSize: 34, lineHeight: 38 }}>
             Seus remédios,{'\n'}na hora certa.
           </ThemedText>

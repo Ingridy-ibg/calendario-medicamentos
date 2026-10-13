@@ -14,6 +14,8 @@ export interface NovoMedicamento {
   notificacoesAtivas?: boolean;
   /** Padrão `true`; `false` = cadastrado fora da agenda (agenda-membership). */
   naAgenda?: boolean;
+  /** Já normalizada pelo domínio: nulo/ausente = sem observação. */
+  observacoes?: string | null;
 }
 
 export function inserirMedicamento(db: AppDb, dados: NovoMedicamento, agora: Date = new Date()) {
@@ -26,6 +28,7 @@ export function inserirMedicamento(db: AppDb, dados: NovoMedicamento, agora: Dat
     quantidadePorEmbalagem: dados.quantidadePorEmbalagem,
     notificacoesAtivas: dados.notificacoesAtivas ?? true,
     naAgenda: dados.naAgenda ?? true,
+    observacoes: dados.observacoes ?? null,
     createdAt: agora,
     updatedAt: agora,
     deletedAt: null,
@@ -41,7 +44,14 @@ export function buscarMedicamentoPorId(db: AppDb, id: string) {
 type PatchMedicamento = Partial<
   Pick<
     NovoMedicamento,
-    'nome' | 'dosagem' | 'criticidade' | 'quantidadeEmEstoque' | 'quantidadePorEmbalagem' | 'notificacoesAtivas' | 'naAgenda'
+    | 'nome'
+    | 'dosagem'
+    | 'criticidade'
+    | 'quantidadeEmEstoque'
+    | 'quantidadePorEmbalagem'
+    | 'notificacoesAtivas'
+    | 'naAgenda'
+    | 'observacoes'
   >
 >;
 

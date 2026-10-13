@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { validarCamposComuns, validarEsquema } from './validation';
+import { LIMITE_OBSERVACOES, normalizarObservacoes, validarCamposComuns, validarEsquema } from './validation';
 import type { CamposComunsFormulario, DadosEsquemaFormulario } from './types';
 
 const comunsValidos: CamposComunsFormulario = {
@@ -24,6 +24,32 @@ describe('validarCamposComuns', () => {
     expect(validarCamposComuns({ ...comunsValidos, quantidadePorEmbalagem: 0 })).toHaveProperty(
       'quantidadePorEmbalagem',
     );
+  });
+});
+
+describe('observações (identidade-e-observacoes)', () => {
+  it('aceita exatamente 200 caracteres', () => {
+    expect(validarCamposComuns({ ...comunsValidos, observacoes: 'a'.repeat(LIMITE_OBSERVACOES) })).toEqual({});
+  });
+
+  it('rejeita 201 caracteres', () => {
+    expect(validarCamposComuns({ ...comunsValidos, observacoes: 'a'.repeat(LIMITE_OBSERVACOES + 1) })).toHaveProperty(
+      'observacoes',
+    );
+  });
+
+  it('não conta os espaços das pontas no limite', () => {
+    expect(validarCamposComuns({ ...comunsValidos, observacoes: `  ${'a'.repeat(LIMITE_OBSERVACOES)}  ` })).toEqual({});
+  });
+
+  it('normaliza vazio e só espaços para sem observação', () => {
+    expect(normalizarObservacoes('')).toBeNull();
+    expect(normalizarObservacoes('   ')).toBeNull();
+    expect(normalizarObservacoes(undefined)).toBeNull();
+  });
+
+  it('descarta os espaços das pontas', () => {
+    expect(normalizarObservacoes('  Tomar em jejum \n')).toBe('Tomar em jejum');
   });
 });
 

@@ -227,6 +227,28 @@ describe('editarMedicamento', () => {
     expect(buscarDosePorId(db, tomada.id)).toMatchObject({ status: 'tomada', dataHoraPrevista: tomada.dataHoraPrevista });
   });
 
+  it('grava, troca e apaga a observação', () => {
+    const db = createTestDb();
+    const { medicamento } = cadastrarMedicamento(
+      db,
+      { comuns: { ...comuns, observacoes: '  Tomar em jejum  ' }, esquema: diario },
+      new Date(2026, 9, 10, 7),
+    );
+    expect(buscarMedicamentoPorId(db, medicamento.id)?.observacoes).toBe('Tomar em jejum');
+
+    editarMedicamento(db, medicamento.id, { comuns: { ...comuns, observacoes: 'Com comida' }, esquema: diario }, new Date(2026, 9, 11));
+    expect(buscarMedicamentoPorId(db, medicamento.id)?.observacoes).toBe('Com comida');
+
+    editarMedicamento(db, medicamento.id, { comuns: { ...comuns, observacoes: '   ' }, esquema: diario }, new Date(2026, 9, 12));
+    expect(buscarMedicamentoPorId(db, medicamento.id)?.observacoes).toBeNull();
+  });
+
+  it('cadastro sem observação grava nulo', () => {
+    const db = createTestDb();
+    const { medicamento } = cadastrarMedicamento(db, { comuns, esquema: diario }, new Date(2026, 9, 10, 7));
+    expect(buscarMedicamentoPorId(db, medicamento.id)?.observacoes).toBeNull();
+  });
+
   it('edição inválida não grava nada', () => {
     const db = createTestDb();
     const { medicamento } = cadastrarMedicamento(db, { comuns, esquema: diario }, new Date(2026, 9, 10, 7));

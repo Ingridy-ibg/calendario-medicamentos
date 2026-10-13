@@ -32,7 +32,7 @@ import { materializarJanela, rematerializarJanelaAposEdicao } from '@/domain/dos
 import { paraDadosFormulario, paraValoresFormulario } from './formulario';
 import type { DadosEsquemaFormulario, DadosFormularioMedicamento, ModoDuracao } from './types';
 import { type HistoricoDaVolta, montarPreviaCadastro, type PlanoCadastro, type PreviaCadastro } from './previa';
-import { validarEmUso, validarEsquema, validarFormulario } from './validation';
+import { normalizarObservacoes, validarEmUso, validarEsquema, validarFormulario } from './validation';
 
 export class ErroValidacao extends Error {
   constructor(public readonly erros: Record<string, string>) {
@@ -181,7 +181,11 @@ export function cadastrarMedicamento(db: AppDb, dadosInformados: DadosFormulario
   const { emCaixas: _emCaixas, ...comuns } = dados.comuns;
 
   return db.transaction((tx) => {
-    const medicamento = inserirMedicamento(tx, { ...comuns, criticidade, naAgenda }, agora);
+    const medicamento = inserirMedicamento(
+      tx,
+      { ...comuns, observacoes: normalizarObservacoes(comuns.observacoes), criticidade, naAgenda },
+      agora,
+    );
     const esquema = inserirEsquema(tx, paraNovoEsquema(medicamento.id, dados.esquema, previa.plano), agora);
     if (naAgenda) materializarDosesIniciais(tx, buscarEsquemaPorId(tx, esquema.id)!, previa.plano, agora);
     return { medicamento, esquema, previa };
@@ -274,7 +278,12 @@ export function editarMedicamento(db: AppDb, medicamentoId: string, dados: Dados
   const { emCaixas: _emCaixas, ...comuns } = dados.comuns;
 
   return db.transaction((tx) => {
-    const medicamento = atualizarMedicamento(tx, medicamentoId, { ...comuns, criticidade }, agora);
+    const medicamento = atualizarMedicamento(
+      tx,
+      medicamentoId,
+      { ...comuns, observacoes: normalizarObservacoes(comuns.observacoes), criticidade },
+      agora,
+    );
     const esquema = editarEsquema(tx, esquemaAtual.id, dados.esquema, agora);
     return { medicamento, esquema };
   });

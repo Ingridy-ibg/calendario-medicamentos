@@ -4,6 +4,15 @@ import type { CamposComunsFormulario, DadosEsquemaFormulario, DadosFormularioMed
 
 export type ErrosValidacao = Record<string, string>;
 
+/** Tamanho máximo das observações — cabem na tela do alarme (identidade-e-observacoes). */
+export const LIMITE_OBSERVACOES = 200;
+
+/** Observação como é gravada: sem espaços nas pontas; vazia ou só espaços = sem observação (`null`). */
+export function normalizarObservacoes(texto: string | null | undefined): string | null {
+  const limpo = texto?.trim() ?? '';
+  return limpo ? limpo : null;
+}
+
 export function validarCamposComuns(comuns: CamposComunsFormulario): ErrosValidacao {
   const erros: ErrosValidacao = {};
   if (!comuns.nome.trim()) {
@@ -11,6 +20,9 @@ export function validarCamposComuns(comuns: CamposComunsFormulario): ErrosValida
   }
   if (!comuns.dosagem.trim()) {
     erros.dosagem = 'Informe a dose.';
+  }
+  if ((normalizarObservacoes(comuns.observacoes)?.length ?? 0) > LIMITE_OBSERVACOES) {
+    erros.observacoes = `Use no máximo ${LIMITE_OBSERVACOES} caracteres.`;
   }
   const porEmbalagemValida = Number.isFinite(comuns.quantidadePorEmbalagem) && comuns.quantidadePorEmbalagem > 0;
   if (!porEmbalagemValida) {

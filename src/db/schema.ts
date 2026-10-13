@@ -33,6 +33,8 @@ export const medicamentos = sqliteTable('medicamentos', {
   notificacoesAtivas: integer('notificacoes_ativas', { mode: 'boolean' }).notNull().default(true),
   /** Fora da agenda: cadastrado e com histórico, mas sem doses, lembretes nem alertas (agenda-membership). */
   naAgenda: integer('na_agenda', { mode: 'boolean' }).notNull().default(true),
+  /** Anotação livre do usuário (até 200 caracteres); nulo = sem observação (identidade-e-observacoes). */
+  observacoes: text('observacoes'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),

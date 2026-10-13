@@ -25,7 +25,7 @@ import {
 } from '@/domain/medication-registration/formulario';
 import { ErroValidacao } from '@/domain/medication-registration/registration';
 import type { DadosEmUso, DadosFormularioMedicamento, EmUsoFormulario, ModoDuracao } from '@/domain/medication-registration/types';
-import type { ErrosValidacao } from '@/domain/medication-registration/validation';
+import { type ErrosValidacao, LIMITE_OBSERVACOES } from '@/domain/medication-registration/validation';
 import { paraUnidades, textoEstoque } from '@/domain/medication-stock/caixas';
 import { useTheme } from '@/hooks/use-theme';
 import { Tocavel } from '@/components/ui/tocavel';
@@ -258,6 +258,7 @@ export function FormularioMedicamento({
   const [diasPausa, setDiasPausa] = useState(valoresIniciais.diasPausa);
   const [horarioCiclico, setHorarioCiclico] = useState(valoresIniciais.horarioCiclico);
   const [limiteDiario, setLimiteDiario] = useState(valoresIniciais.limiteDiario);
+  const [observacoes, setObservacoes] = useState(valoresIniciais.observacoes);
 
   const [erros, setErros] = useState<ErrosValidacao>({});
 
@@ -320,6 +321,7 @@ export function FormularioMedicamento({
           diasPausa,
           horarioCiclico,
           limiteDiario,
+          observacoes,
         }),
       });
       setErros({});
@@ -575,6 +577,25 @@ export function FormularioMedicamento({
                   Medicamentos cíclicos são sempre especiais.
                 </ThemedText>
               ) : null}
+            </SecaoFormulario>
+
+            <SecaoFormulario titulo="Observações">
+              <CampoTexto
+                rotulo="Anotações (opcional)"
+                erro={erros.observacoes}
+                ajuda={
+                  criticidadeAtual === 'especial'
+                    ? 'Aparece também na tela do alarme, junto com o nome do remédio.'
+                    : 'Aparece só aqui no app, na tela deste medicamento.'
+                }
+                value={observacoes}
+                onChangeText={setObservacoes}
+                placeholder="Ex.: tomar em jejum, 30 min antes do café"
+                multiline
+                maxLength={LIMITE_OBSERVACOES}
+                textAlignVertical="top"
+                style={{ minHeight: 96, paddingTop: 12, paddingBottom: 12, lineHeight: 22 }}
+              />
             </SecaoFormulario>
             {modo === 'cadastro' && tipo !== 'SE_NECESSARIO' ? (
               <SecaoInicio

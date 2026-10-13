@@ -29,6 +29,8 @@ export interface ValoresFormulario {
   diasPausa: string;
   horarioCiclico: string;
   limiteDiario: string;
+  /** Texto livre; vazio = sem observação (identidade-e-observacoes). */
+  observacoes: string;
 }
 
 export const VALORES_INICIAIS: ValoresFormulario = {
@@ -47,6 +49,7 @@ export const VALORES_INICIAIS: ValoresFormulario = {
   diasPausa: '',
   horarioCiclico: '',
   limiteDiario: '',
+  observacoes: '',
 };
 
 function paraNumero(valor: string): number {
@@ -95,6 +98,7 @@ export function paraDadosFormulario(v: ValoresFormulario): DadosFormularioMedica
       quantidadeEmEstoque: paraUnidades({ ...emCaixas, porCaixa: quantidadePorEmbalagem }),
       quantidadePorEmbalagem,
       emCaixas,
+      observacoes: v.observacoes,
     },
     esquema: paraDadosEsquema(v),
   };
@@ -117,6 +121,7 @@ export function paraValoresFormulario(medicamento: Medicamento, esquemaRow: Esqu
     ...camposDeEstoque(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem),
     quantidadePorEmbalagem: String(medicamento.quantidadePorEmbalagem),
     tipo: esquemaRow.tipo,
+    observacoes: medicamento.observacoes ?? '',
   };
   const esquema = paraEsquemaDominio(esquemaRow);
   const duracaoDe = (dias: number | null): ModoDuracao => (dias === null ? { modo: 'continuo' } : { modo: 'dias', dias });

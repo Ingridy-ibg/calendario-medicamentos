@@ -234,6 +234,15 @@ export default function DetalheMedicamentoScreen() {
             </View>
           </View>
 
+          {medicamento.observacoes ? (
+            <Cartao>
+              <View style={{ gap: 8 }}>
+                <CabecalhoSecao>Observações</CabecalhoSecao>
+                <ThemedText>{medicamento.observacoes}</ThemedText>
+              </View>
+            </Cartao>
+          ) : null}
+
           <Cartao>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
               <View
