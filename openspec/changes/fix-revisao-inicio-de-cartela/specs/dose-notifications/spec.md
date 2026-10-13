@@ -25,3 +25,7 @@ Fechar a tela de alarme SHALL levar o usuário a uma tela utilizável do app: a 
 #### Scenario: Alarme de dose inexistente logo após instalar
 - **WHEN** o app recém-instalado, com a boas-vindas ainda não concluída, abre a tela de alarme mostrando "Dose não encontrada" e o usuário toca em "Fechar"
 - **THEN** o app mostra a boas-vindas
+
+#### Scenario: Primeira abertura do app
+- **WHEN** o usuário abre o app pela primeira vez depois de instalar, sem nenhum alarme tocando
+- **THEN** o app mostra a boas-vindas, nunca a tela de alarme

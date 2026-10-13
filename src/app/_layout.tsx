@@ -129,10 +129,15 @@ export default function RootLayout() {
           <Stack.Screen name="saudacao" options={{ animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen name="perfil/alarme" />
         </Stack.Protected>
-        <Stack.Screen name="alarme/[doseId]" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
         <Stack.Protected guard={!boasVindasConcluida}>
           <Stack.Screen name="boas-vindas" options={{ gestureEnabled: false }} />
         </Stack.Protected>
+        {/*
+          Fora das protegidas (abre por cima de qualquer tela) e sempre por último: sem a
+          boas-vindas concluída, o router abre a primeira tela liberada da lista, e ela
+          tem de ser a boas-vindas, nunca o alarme (fix-revisao-inicio-de-cartela).
+        */}
+        <Stack.Screen name="alarme/[doseId]" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
       </Stack>
     </ThemeProvider>
   );

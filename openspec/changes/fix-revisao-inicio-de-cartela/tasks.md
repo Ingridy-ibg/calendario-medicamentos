@@ -19,7 +19,7 @@
 
 - [ ] 4.1 `agendadorNotificacoes.cancelar` remove também a notificação exibida (`dismissNotificationAsync`), e `processarResposta` a remove no "Adiar" antes de reagendar. Verificar: `npx tsc --noEmit` passa; no aparelho, os cenários "Tomei agora pela notificação", "Adiar pela notificação", "Dose resolvida no app com a notificação exibida" e "Abrir o app não some com notificação pendente"
 
-- [ ] 4.2 "Fechar" da tela de alarme leva à boas-vindas quando ela não foi concluída. Verificar: `npx tsc --noEmit` passa; no aparelho, o cenário "Alarme de dose inexistente logo após instalar"
+- [ ] 4.2 "Fechar" da tela de alarme leva à boas-vindas quando ela não foi concluída, e a tela de alarme é declarada depois da boas-vindas no layout. Verificar: `npx tsc --noEmit` passa; no aparelho, os cenários "Alarme de dose inexistente logo após instalar" e "Primeira abertura do app"
 - [x] 4.3 `android.allowBackup: false` no `app.json`. Verificar: `npx expo config --type introspect` mostra `allowBackup` falso no manifest do Android
 
 ## 5. Limpeza

@@ -82,6 +82,7 @@ O resultado é sempre uma única dose de início pendente.
 ### 9. Saída da tela de alarme e backup automático desligado
 
 - A rota `alarme/[doseId]` fica fora das rotas protegidas, para abrir mesmo antes de qualquer outra tela. Por isso o "Fechar" não pode supor que a agenda está liberada: sem a boas-vindas concluída, ele vai para `/boas-vindas`.
+- A tela de alarme é declarada **depois** da boas-vindas no `_layout.tsx`. Sem a boas-vindas concluída, o expo-router abre a primeira tela liberada da lista. Com o alarme antes, ele aparecia na primeira abertura do app, sem dose ("Dose não encontrada"). Era essa a causa do relato do APK, e não o backup.
 - `android.allowBackup: false` no `app.json`. O Auto Backup do Android restaura o banco, o kv-store e as SharedPreferences do módulo de alarme a partir de cópias feitas em momentos diferentes. Isso gera alarmes de doses que não existem.
 
 *Trade-off:* trocar de aparelho não traz os medicamentos. Hoje isso já não é confiável, e uma exportação explícita, se fizer falta, é outra change.
