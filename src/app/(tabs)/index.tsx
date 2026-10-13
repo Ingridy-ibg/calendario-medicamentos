@@ -33,7 +33,6 @@ import { confirmarNovaCartelaCiclica } from '@/domain/dose-scheduling/resolucao'
 import { estadoLimiteSeNecessario, exigeConfirmacaoAoRegistrar } from '@/domain/dose-scheduling/se-necessario';
 import type { EsquemaCiclico, EsquemaSeNecessario } from '@/domain/dose-scheduling/types';
 import { periodoDoDia, textoSaudacao } from '@/domain/daily-greeting/saudacao';
-import { inicialDoNome } from '@/domain/preferencias/preferencias';
 import { useTheme } from '@/hooks/use-theme';
 import { reconciliarNotificacoesSeDisponivel } from '@/lib/notificacoes-seguras';
 import { usePreferencias } from '@/lib/preferencias';
@@ -65,32 +64,6 @@ const ROTULO_CURTO: Record<StatusDose, string> = {
   pulada: 'Pulada',
   perdida: 'Perdida',
 };
-
-/** Botão circular de perfil: inicial do nome ou ícone de pessoa (specs/user-profile). */
-function BotaoPerfil() {
-  const theme = useTheme();
-  const inicial = inicialDoNome(usePreferencias((estado) => estado.nome));
-  return (
-    <Tocavel
-      accessibilityRole="button"
-      accessibilityLabel="Meu perfil"
-      onPress={() => router.push('/perfil')}
-      style={{
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: theme.accentSoft,
-      }}>
-      {inicial ? (
-        <ThemedText style={{ color: theme.onAccentSoft, fontFamily: FAMILIA_TEXTO[700], fontSize: 17 }}>{inicial}</ThemedText>
-      ) : (
-        <Icone nome="pessoa" cor={theme.onAccentSoft} tamanho={22} />
-      )}
-    </Tocavel>
-  );
-}
 
 function ResumoCartao({ resumo }: { resumo: ResumoDoDia }) {
   const theme = useTheme();
@@ -333,15 +306,12 @@ export default function AgendaDoDiaScreen() {
                 {textoSaudacao(periodoDoDia(hoje), nome)}
               </ThemedText>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Botao
-                rotulo="Novo"
-                icone="mais"
-                onPress={() => router.push('/medicamento/novo')}
-                style={{ borderRadius: 999, paddingLeft: 14, paddingRight: 18 }}
-              />
-              <BotaoPerfil />
-            </View>
+            <Botao
+              rotulo="Novo"
+              icone="mais"
+              onPress={() => router.push('/medicamento/novo')}
+              style={{ borderRadius: 999, paddingLeft: 14, paddingRight: 18 }}
+            />
           </View>
 
           {resumo.total > 0 ? <ResumoCartao resumo={resumo} /> : null}

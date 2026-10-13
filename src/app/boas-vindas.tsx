@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { EscolhaAparencia } from '@/components/perfil/escolha-aparencia';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
+import { CampoTexto } from '@/components/ui/campo-texto';
 import { Icone, type NomeIcone } from '@/components/ui/icone';
 import { FAMILIA_TEXTO } from '@/constants/fontes';
 import { useTheme } from '@/hooks/use-theme';
@@ -25,18 +27,25 @@ const GRADE: ('vazio' | 'tomada' | 'atraso')[] = [
 ];
 
 /**
- * Primeira abertura (specs/onboarding). O roteamento fica no layout raiz:
- * quando a flag é concluída, o `Stack.Protected` troca para a agenda sozinho.
+ * Primeira abertura (specs/onboarding), em duas etapas: a apresentação e,
+ * depois dela, nome e aparência (onboarding-profile-step). O roteamento fica
+ * no layout raiz: quando a flag é concluída, o `Stack.Protected` troca para a
+ * agenda sozinho.
  */
 export default function BoasVindasScreen() {
+  const [etapa, setEtapa] = useState<'apresentacao' | 'perfil'>('apresentacao');
+  return etapa === 'apresentacao' ? <EtapaApresentacao aoAvancar={() => setEtapa('perfil')} /> : <EtapaPerfil />;
+}
+
+function EtapaApresentacao({ aoAvancar }: { aoAvancar: () => void }) {
   const theme = useTheme();
   const [pedindo, setPedindo] = useState(false);
-  const { gravarBoasVindasConcluida, concluirBoasVindas } = usePreferencias();
+  const { gravarBoasVindasConcluida } = usePreferencias();
 
   async function ativarLembretes() {
     setPedindo(true);
     // A flag é gravada antes dos pedidos: negar, ou fechar o app no meio de um
-    // diálogo, não traz a boas-vindas de volta (design.md, decisão 5).
+    // diálogo ou na etapa seguinte, não traz a boas-vindas de volta.
     gravarBoasVindasConcluida();
     try {
       if (!isExpoGo) {
@@ -46,8 +55,13 @@ export default function BoasVindasScreen() {
         await solicitarPermissoesEssenciais();
       }
     } finally {
-      concluirBoasVindas();
+      aoAvancar();
     }
+  }
+
+  function agoraNao() {
+    gravarBoasVindasConcluida();
+    aoAvancar();
   }
 
   const corGrade = { vazio: '#22322D', tomada: '#2F6E5F', atraso: '#8A5A24' } as const;
@@ -120,7 +134,7 @@ export default function BoasVindasScreen() {
           <Botao rotulo="Ativar lembretes e começar" tamanho="grande" onPress={ativarLembretes} disabled={pedindo} />
           <Pressable
             accessibilityRole="button"
-            onPress={concluirBoasVindas}
+            onPress={agoraNao}
             disabled={pedindo}
             style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
             <ThemedText themeColor="textSecondary" style={{ fontFamily: FAMILIA_TEXTO[600], fontSize: 15 }}>
@@ -128,6 +142,85 @@ export default function BoasVindasScreen() {
             </ThemedText>
           </Pressable>
         </View>
+      </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+/**
+ * Nome e aparência (artboard "Boas-vindas — nome e aparência"). A aparência é
+ * gravada e aplicada a cada toque; "Começar" grava o nome e libera a agenda.
+ */
+function EtapaPerfil() {
+  const theme = useTheme();
+  const { aparencia, definirNome, definirAparencia, concluirBoasVindas } = usePreferencias();
+  const [rascunhoNome, setRascunhoNome] = useState('');
+
+  function comecar() {
+    definirNome(rascunhoNome);
+    concluirBoasVindas();
+  }
+
+  return (
+    <ThemedView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 40, gap: 22 }} keyboardShouldPersistTaps="handled">
+            <View style={{ gap: 10 }}>
+              <View
+                style={{
+                  alignSelf: 'flex-start',
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 999,
+                  backgroundColor: theme.accentSoft,
+                }}>
+                <ThemedText
+                  style={{
+                    color: theme.onAccentSoft,
+                    fontFamily: FAMILIA_TEXTO[700],
+                    fontSize: 12,
+                    lineHeight: 16,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                  }}>
+                  Quase lá
+                </ThemedText>
+              </View>
+              <ThemedText type="display" accessibilityRole="header">
+                Como podemos te chamar?
+              </ThemedText>
+              <ThemedText themeColor="textSecondary">
+                Usamos seu nome só para te cumprimentar. Ele fica salvo apenas neste aparelho.
+              </ThemedText>
+            </View>
+
+            <CampoTexto
+              rotulo="Seu nome (opcional)"
+              value={rascunhoNome}
+              onChangeText={setRascunhoNome}
+              onBlur={() => definirNome(rascunhoNome)}
+              placeholder="Ex.: Ana"
+              autoCapitalize="words"
+              autoComplete="given-name"
+              returnKeyType="done"
+            />
+
+            <View style={{ gap: 10 }}>
+              <ThemedText type="smallBold">Aparência do app</ThemedText>
+              <EscolhaAparencia valor={aparencia} aoEscolher={definirAparencia} />
+            </View>
+          </ScrollView>
+
+          <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24, gap: 10 }}>
+            <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+              {rascunhoNome.trim()
+                ? 'Você pode mudar tudo isso depois em Meu perfil.'
+                : 'Sem nome, tudo bem: você pode mudar isso depois em Meu perfil.'}
+            </ThemedText>
+            <Botao rotulo="Começar" tamanho="grande" onPress={comecar} />
+          </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );

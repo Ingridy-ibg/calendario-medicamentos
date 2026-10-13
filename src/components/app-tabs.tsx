@@ -35,6 +35,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Medicamentos</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="pill" sf="pills" />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="perfil">
+        <NativeTabs.Trigger.Label>Perfil</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon md="person" sf="person" />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

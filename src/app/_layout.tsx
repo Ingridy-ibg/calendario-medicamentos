@@ -122,7 +122,6 @@ export default function RootLayout() {
             name="medicamento/[id]/compra"
             options={{ presentation: 'formSheet', sheetAllowedDetents: 'fitToContents', sheetGrabberVisible: true }}
           />
-          <Stack.Screen name="perfil" />
           <Stack.Screen name="saudacao" options={{ animation: 'fade', gestureEnabled: false }} />
         </Stack.Protected>
         <Stack.Protected guard={!boasVindasConcluida}>
