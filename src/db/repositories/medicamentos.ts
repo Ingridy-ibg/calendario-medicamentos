@@ -12,6 +12,8 @@ export interface NovoMedicamento {
   quantidadeEmEstoque: number;
   quantidadePorEmbalagem: number;
   notificacoesAtivas?: boolean;
+  /** Padrão `true`; `false` = cadastrado fora da agenda (agenda-membership). */
+  naAgenda?: boolean;
 }
 
 export function inserirMedicamento(db: AppDb, dados: NovoMedicamento, agora: Date = new Date()) {
@@ -23,6 +25,7 @@ export function inserirMedicamento(db: AppDb, dados: NovoMedicamento, agora: Dat
     quantidadeEmEstoque: dados.quantidadeEmEstoque,
     quantidadePorEmbalagem: dados.quantidadePorEmbalagem,
     notificacoesAtivas: dados.notificacoesAtivas ?? true,
+    naAgenda: dados.naAgenda ?? true,
     createdAt: agora,
     updatedAt: agora,
     deletedAt: null,
@@ -38,7 +41,7 @@ export function buscarMedicamentoPorId(db: AppDb, id: string) {
 type PatchMedicamento = Partial<
   Pick<
     NovoMedicamento,
-    'nome' | 'dosagem' | 'criticidade' | 'quantidadeEmEstoque' | 'quantidadePorEmbalagem' | 'notificacoesAtivas'
+    'nome' | 'dosagem' | 'criticidade' | 'quantidadeEmEstoque' | 'quantidadePorEmbalagem' | 'notificacoesAtivas' | 'naAgenda'
   >
 >;
 
@@ -55,10 +58,11 @@ export function removerMedicamento(db: AppDb, id: string, agora: Date) {
 }
 
 /**
- * Medicamentos não removidos com seu esquema ativo, em ordem alfabética
- * (aba Medicamentos — specs/medication-management).
+ * Medicamentos não removidos com seu esquema ativo (aba Medicamentos —
+ * specs/medication-management): os da agenda primeiro, os fora da agenda por
+ * último, cada grupo em ordem alfabética (agenda-membership, decisão 5).
  */
-export function listarMedicamentosAtivosComEsquema(db: AppDb) {
+export function listarMedicamentosComEsquema(db: AppDb) {
   const ativos = db.select().from(medicamentos).where(isNull(medicamentos.deletedAt)).all();
   return ativos
     .flatMap((medicamento) => {
@@ -69,5 +73,9 @@ export function listarMedicamentosAtivosComEsquema(db: AppDb) {
         .get();
       return esquema ? [{ medicamento, esquema }] : [];
     })
-    .sort((a, b) => a.medicamento.nome.localeCompare(b.medicamento.nome, 'pt-BR', { sensitivity: 'base' }));
+    .sort(
+      (a, b) =>
+        Number(b.medicamento.naAgenda) - Number(a.medicamento.naAgenda) ||
+        a.medicamento.nome.localeCompare(b.medicamento.nome, 'pt-BR', { sensitivity: 'base' }),
+    );
 }

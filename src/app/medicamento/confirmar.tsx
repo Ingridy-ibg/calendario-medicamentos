@@ -2,7 +2,7 @@ import { format, isSameDay, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -16,7 +16,7 @@ import { FAMILIA_TEXTO, FAMILIA_TITULO } from '@/constants/fontes';
 import { db } from '@/db/client';
 import type { PrevisaoEstoque } from '@/domain/medication-management/gestao';
 import { type PreviaCadastro } from '@/domain/medication-registration/previa';
-import { cadastrarMedicamento, prepararCadastro } from '@/domain/medication-registration/registration';
+import { adicionarAAgenda, cadastrarMedicamento, prepararCadastro, prepararVoltaAAgenda } from '@/domain/medication-registration/registration';
 import { textoEstoque } from '@/domain/medication-stock/caixas';
 import type { DadosFormularioMedicamento } from '@/domain/medication-registration/types';
 import { useTheme } from '@/hooks/use-theme';
@@ -102,28 +102,57 @@ function CartaoEscuro({ titulo, detalhe, principal, unidade, linhas }: {
 /**
  * "Confira antes de salvar" (register-ongoing-medication): mostra a prévia
  * calculada e só grava em "Confirmar e agendar". "Ajustar" volta ao
- * formulário preenchido sem gravar nada.
+ * formulário preenchido sem gravar nada. No cadastro, "Adicionar à agenda"
+ * desligado só cadastra; na volta à agenda (agenda-membership, decisão 4), a
+ * mesma prévia mostra o medicamento como se fosse cadastrado agora.
  */
 export default function ConfirmarCadastroScreen() {
   const theme = useTheme();
-  const { dados, previa, definir, limpar } = useCadastroStore();
+  const { dados, previa, modo, definir, limpar } = useCadastroStore();
   const [aviso, setAviso] = useState<string | null>(null);
+  const [adicionarNaAgenda, setAdicionarNaAgenda] = useState(true);
 
   if (!dados || !previa) return <ThemedView style={{ flex: 1 }} />;
   const { agora } = previa;
+  const volta = modo.tipo === 'volta_agenda';
+  // Só cadastrar: nada de doses, cartela, tratamento nem "hoje".
+  const naAgenda = volta || adicionarNaAgenda;
 
   function confirmar() {
-    const novaPrevia = prepararCadastro(dados!, new Date());
-    if (assinatura(novaPrevia) !== assinatura(previa!)) {
+    const agoraConfirmacao = new Date();
+    if (modo.tipo === 'volta_agenda') {
+      const novaPrevia = prepararVoltaAAgenda(db, modo.medicamentoId, agoraConfirmacao).previa;
+      if (assinatura(novaPrevia) !== assinatura(previa!)) {
+        definir(dados!, novaPrevia);
+        setAviso('Os horários mudaram desde que você abriu esta tela. Confira de novo.');
+        return;
+      }
+      adicionarAAgenda(db, modo.medicamentoId, novaPrevia.agora);
+      aposSalvarMedicamento(dados!.comuns.criticidade);
+      limpar();
+      router.back();
+      return;
+    }
+
+    const novaPrevia = prepararCadastro(dados!, agoraConfirmacao);
+    if (adicionarNaAgenda && assinatura(novaPrevia) !== assinatura(previa!)) {
       // O relógio andou e mudou o que seria gravado: mostra de novo em vez de salvar.
       definir(dados!, novaPrevia);
       setAviso('Os horários mudaram desde que você abriu esta tela. Confira de novo.');
       return;
     }
-    cadastrarMedicamento(db, dados!, novaPrevia.agora);
-    aposSalvarMedicamento(dados!.comuns.criticidade);
+    cadastrarMedicamento(db, dados!, novaPrevia.agora, { naAgenda: adicionarNaAgenda });
+    if (adicionarNaAgenda) aposSalvarMedicamento(dados!.comuns.criticidade);
     limpar();
     router.dismissAll();
+  }
+
+  function editarAntesDeVoltar() {
+    if (modo.tipo !== 'volta_agenda') return;
+    // Nada é agendado: a edição salva o medicamento ainda fora da agenda.
+    const id = modo.medicamentoId;
+    limpar();
+    router.replace({ pathname: '/medicamento/[id]/editar', params: { id } });
   }
 
   const { tratamento, cartela, estoque } = previa;
@@ -141,7 +170,7 @@ export default function ConfirmarCadastroScreen() {
           </Tocavel>
           <View style={{ gap: 4 }}>
             <ThemedText type="small" themeColor="textSecondary">
-              Confira antes de salvar
+              {volta ? 'Confira antes de voltar à agenda' : 'Confira antes de salvar'}
             </ThemedText>
             <ThemedText type="display" accessibilityRole="header">
               {dados.comuns.nome}
@@ -160,7 +189,27 @@ export default function ConfirmarCadastroScreen() {
             </Cartao>
           ) : null}
 
-          {cartela ? (
+          {!volta ? (
+            <Cartao>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
+                <ThemedText style={{ fontFamily: FAMILIA_TEXTO[700] }}>Adicionar à agenda</ThemedText>
+                <Switch
+                  accessibilityLabel="Adicionar à agenda"
+                  value={adicionarNaAgenda}
+                  onValueChange={setAdicionarNaAgenda}
+                  trackColor={{ true: theme.accent, false: theme.border }}
+                  thumbColor={theme.surface}
+                />
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                {adicionarNaAgenda
+                  ? 'As doses entram na agenda, com lembretes.'
+                  : 'Só cadastrar: o medicamento fica fora da agenda, sem doses nem lembretes. Você pode adicioná-lo depois pelo detalhe.'}
+              </ThemedText>
+            </Cartao>
+          ) : null}
+
+          {!naAgenda ? null : cartela ? (
             <CartaoEscuro
               titulo="Cartela atual"
               detalhe={cartela.fase === 'ativo' ? `dia ${cartela.dia} de ${cartela.total}` : `pausa: dia ${cartela.dia} de ${cartela.total}`}
@@ -221,7 +270,7 @@ export default function ConfirmarCadastroScreen() {
             </Cartao>
           )}
 
-          {estoque.insuficiente ? (
+          {naAgenda && estoque.insuficiente ? (
             <Cartao fundo="statusPerdidaSoft" style={{ flexDirection: 'row', gap: 12 }} accessibilityRole="alert">
               <Icone nome="alerta" cor={theme.statusPerdida} tamanho={22} />
               <View style={{ flex: 1, gap: 4 }}>
@@ -241,14 +290,14 @@ export default function ConfirmarCadastroScreen() {
             <ThemedText style={{ fontFamily: FAMILIA_TEXTO[700] }}>
               {textoEstoque(estoque.quantidade, dados!.comuns.quantidadePorEmbalagem, dados!.esquema.tipo === 'CICLICO')}
             </ThemedText>
-            {textoPrevisao(estoque.previsao) ? (
+            {naAgenda && textoPrevisao(estoque.previsao) ? (
               <ThemedText type="small" themeColor="textSecondary">
                 {estoque.quantidade} {estoque.quantidade === 1 ? 'unidade' : 'unidades'} · {textoPrevisao(estoque.previsao)}
               </ThemedText>
             ) : null}
           </Cartao>
 
-          {previa.hoje.tomadas.length > 0 || previa.hoje.aAgendar.length > 0 ? (
+          {naAgenda && (previa.hoje.tomadas.length > 0 || previa.hoje.aAgendar.length > 0) ? (
             <Cartao>
               <CabecalhoSecao>Hoje</CabecalhoSecao>
               {previa.hoje.tomadas.map((dose) => (
@@ -266,7 +315,7 @@ export default function ConfirmarCadastroScreen() {
             </Cartao>
           ) : null}
 
-          {previa.diasSemRegistro ? (
+          {naAgenda && previa.diasSemRegistro ? (
             <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 4 }}>
               <Icone nome="info" cor={theme.textSecondary} tamanho={16} />
               <ThemedText type="caption" themeColor="textSecondary" style={{ flex: 1 }}>
@@ -278,8 +327,17 @@ export default function ConfirmarCadastroScreen() {
         </ScrollView>
 
         <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, backgroundColor: theme.background }}>
-          <Botao rotulo="Ajustar" variante="secundario" tamanho="grande" onPress={() => router.back()} style={{ flex: 1 }} />
-          <Botao rotulo="Confirmar e agendar" tamanho="grande" onPress={confirmar} style={{ flex: 1.6 }} />
+          {volta ? (
+            <>
+              <Botao rotulo="Editar" variante="secundario" tamanho="grande" onPress={editarAntesDeVoltar} style={{ flex: 1 }} />
+              <Botao rotulo="Adicionar à agenda" tamanho="grande" onPress={confirmar} style={{ flex: 1.6 }} />
+            </>
+          ) : (
+            <>
+              <Botao rotulo="Ajustar" variante="secundario" tamanho="grande" onPress={() => router.back()} style={{ flex: 1 }} />
+              <Botao rotulo={adicionarNaAgenda ? 'Confirmar e agendar' : 'Cadastrar'} tamanho="grande" onPress={confirmar} style={{ flex: 1.6 }} />
+            </>
+          )}
         </View>
       </SafeAreaView>
     </ThemedView>

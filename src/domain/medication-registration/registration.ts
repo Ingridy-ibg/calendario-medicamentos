@@ -15,6 +15,7 @@ import {
   listarEsquemasPorMedicamento,
   type NovoEsquema,
   paraEsquemaDominio,
+  reiniciarEsquema,
   removerEsquema,
 } from '@/db/repositories/esquemas';
 import {
@@ -28,8 +29,9 @@ import { estaDentroDaDuracao } from '@/domain/dose-scheduling/duracao';
 import { gerarPrimeiraDoseIntervalo } from '@/domain/dose-scheduling/intervalo-horas';
 import { materializarJanela, rematerializarJanelaAposEdicao } from '@/domain/dose-scheduling/janela-rolante';
 
+import { paraDadosFormulario, paraValoresFormulario } from './formulario';
 import type { DadosEsquemaFormulario, DadosFormularioMedicamento, ModoDuracao } from './types';
-import { montarPreviaCadastro, type PlanoCadastro } from './previa';
+import { montarPreviaCadastro, type PlanoCadastro, type PreviaCadastro } from './previa';
 import { validarEmUso, validarEsquema, validarFormulario } from './validation';
 
 export class ErroValidacao extends Error {
@@ -152,7 +154,13 @@ export function prepararCadastro(dados: DadosFormularioMedicamento, agora: Date)
   return montarPreviaCadastro(dados, agora);
 }
 
-export function cadastrarMedicamento(db: AppDb, dados: DadosFormularioMedicamento, agora: Date) {
+export interface OpcoesCadastro {
+  /** `false` = só cadastrar, fora da agenda: sem doses e ignorando "Já estava tomando" (agenda-membership). */
+  naAgenda?: boolean;
+}
+
+export function cadastrarMedicamento(db: AppDb, dadosInformados: DadosFormularioMedicamento, agora: Date, { naAgenda = true }: OpcoesCadastro = {}) {
+  const dados = naAgenda ? dadosInformados : { ...dadosInformados, emUso: undefined };
   prepararCadastro(dados, agora);
 
   // A mesma prévia que a tela de confirmação mostra decide o que é gravado.
@@ -165,9 +173,9 @@ export function cadastrarMedicamento(db: AppDb, dados: DadosFormularioMedicament
   const { emCaixas: _emCaixas, ...comuns } = dados.comuns;
 
   return db.transaction((tx) => {
-    const medicamento = inserirMedicamento(tx, { ...comuns, criticidade }, agora);
+    const medicamento = inserirMedicamento(tx, { ...comuns, criticidade, naAgenda }, agora);
     const esquema = inserirEsquema(tx, paraNovoEsquema(medicamento.id, dados.esquema, previa.plano), agora);
-    materializarDosesIniciais(tx, buscarEsquemaPorId(tx, esquema.id)!, previa.plano, agora);
+    if (naAgenda) materializarDosesIniciais(tx, buscarEsquemaPorId(tx, esquema.id)!, previa.plano, agora);
     return { medicamento, esquema, previa };
   });
 }
@@ -226,7 +234,10 @@ export function editarEsquema(db: AppDb, esquemaId: string, novosDados: DadosEsq
   atualizarEsquema(db, esquemaId, patch, agora);
 
   const esquemaAtualizado = buscarEsquemaPorId(db, esquemaId)!;
-  materializarDosesFuturasAposEdicao(db, esquemaAtualizado, agora);
+  // Fora da agenda não gera doses; a volta à agenda recomeça o esquema.
+  if (buscarMedicamentoPorId(db, esquemaAtualizado.medicamentoId)?.naAgenda) {
+    materializarDosesFuturasAposEdicao(db, esquemaAtualizado, agora);
+  }
   return esquemaAtualizado;
 }
 
@@ -305,4 +316,52 @@ export function removerMedicamentoComHistorico(db: AppDb, medicamentoId: string,
     removerEsquema(db, esquema.id, agora);
     substituirDosesFuturas(db, esquema.id, []);
   }
+}
+
+// ------------------------------------------------- na agenda / fora da agenda
+
+function esquemaAtivoDe(db: AppDb, medicamentoId: string) {
+  const esquema = listarEsquemasPorMedicamento(db, medicamentoId).find((linha) => linha.deletedAt === null);
+  if (!esquema) throw new Error(`Medicamento ${medicamentoId} sem esquema ativo`);
+  return esquema;
+}
+
+/**
+ * Retira da agenda (agenda-membership, decisão 3): apaga as doses ainda não
+ * resolvidas e mantém o histórico. Quem chama reconcilia as notificações.
+ */
+export function retirarDaAgenda(db: AppDb, medicamentoId: string, agora: Date) {
+  db.transaction((tx) => {
+    atualizarMedicamento(tx, medicamentoId, { naAgenda: false }, agora);
+    substituirDosesFuturas(tx, esquemaAtivoDe(tx, medicamentoId).id, []);
+  });
+}
+
+/**
+ * Dados e prévia da volta à agenda — o medicamento como se fosse cadastrado
+ * agora, sem "Já estava tomando". É o que a confirmação mostra.
+ */
+export function prepararVoltaAAgenda(db: AppDb, medicamentoId: string, agora: Date): { dados: DadosFormularioMedicamento; previa: PreviaCadastro } {
+  const medicamento = buscarMedicamentoPorId(db, medicamentoId);
+  if (!medicamento) throw new Error(`Medicamento ${medicamentoId} não encontrado`);
+  const dados = paraDadosFormulario(paraValoresFormulario(medicamento, esquemaAtivoDe(db, medicamentoId)));
+  return { dados, previa: montarPreviaCadastro(dados, agora) };
+}
+
+/**
+ * Volta à agenda: o esquema recomeça agora (duração a partir de hoje,
+ * intervalo com a primeira dose agora, cíclico aguardando a nova cartela) e
+ * as doses iniciais saem como no cadastro — horários de hoje já passados não
+ * geram dose. Quem chama reconcilia as notificações.
+ */
+export function adicionarAAgenda(db: AppDb, medicamentoId: string, agora: Date) {
+  const { previa } = prepararVoltaAAgenda(db, medicamentoId, agora);
+  return db.transaction((tx) => {
+    const esquema = esquemaAtivoDe(tx, medicamentoId);
+    atualizarMedicamento(tx, medicamentoId, { naAgenda: true }, agora);
+    substituirDosesFuturas(tx, esquema.id, []);
+    const reiniciado = reiniciarEsquema(tx, esquema.id, agora, agora)!;
+    materializarDosesIniciais(tx, reiniciado, previa.plano, agora);
+    return previa;
+  });
 }

@@ -7,7 +7,7 @@ import { buscarEsquemaPorId, inserirEsquema, paraEsquemaDominio } from '@/db/rep
 import {
   buscarMedicamentoPorId,
   inserirMedicamento,
-  listarMedicamentosAtivosComEsquema,
+  listarMedicamentosComEsquema,
   removerMedicamento,
 } from '@/db/repositories/medicamentos';
 import { doses } from '@/db/schema';
@@ -90,7 +90,7 @@ describe('lista (1.6)', () => {
     cadastrarMedicamento(db, { comuns: { ...comuns, nome: 'Losartana' }, esquema: diario }, agora);
     removerMedicamento(db, medicamento.id, agora);
 
-    expect(listarMedicamentosAtivosComEsquema(db).map((item) => item.medicamento.nome)).toEqual([
+    expect(listarMedicamentosComEsquema(db).map((item) => item.medicamento.nome)).toEqual([
       'Ácido fólico',
       'Losartana',
       'vitamina D',

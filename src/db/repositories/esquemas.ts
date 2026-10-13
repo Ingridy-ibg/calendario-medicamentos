@@ -3,7 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { Esquema } from '@/domain/dose-scheduling/types';
 import { generateId } from '@/lib/id';
 
-import { esquemas } from '../schema';
+import { esquemas, medicamentos } from '../schema';
 import type { AppDb } from './types';
 
 interface CamposComuns {
@@ -102,11 +102,7 @@ export function listarEsquemasPorMedicamento(db: AppDb, medicamentoId: string) {
  * descobertos partindo apenas das doses ativas.
  */
 export function listarEsquemasCiclicos(db: AppDb) {
-  return db
-    .select()
-    .from(esquemas)
-    .where(and(eq(esquemas.tipo, 'CICLICO'), isNull(esquemas.deletedAt)))
-    .all();
+  return listarEsquemasAtivos(db).filter((esquema) => esquema.tipo === 'CICLICO');
 }
 
 /**
@@ -117,6 +113,22 @@ export function listarEsquemasCiclicos(db: AppDb) {
  * materializado na janela rolante.
  */
 export function listarEsquemasAtivos(db: AppDb) {
+  // Fora da agenda (agenda-membership, decisão 2): sem doses, lembretes nem
+  // projeção — agenda, calendário futuro, renovação e reconciliador partem daqui.
+  return db
+    .select({ esquema: esquemas })
+    .from(esquemas)
+    .innerJoin(medicamentos, eq(medicamentos.id, esquemas.medicamentoId))
+    .where(and(isNull(esquemas.deletedAt), isNull(medicamentos.deletedAt), eq(medicamentos.naAgenda, true)))
+    .all()
+    .map((linha) => linha.esquema);
+}
+
+/**
+ * Todo esquema não removido, inclusive de medicamentos fora da agenda — para
+ * o histórico de dias passados do calendário, que continua aparecendo.
+ */
+export function listarEsquemasNaoRemovidos(db: AppDb) {
   return db.select().from(esquemas).where(isNull(esquemas.deletedAt)).all();
 }
 
@@ -157,6 +169,16 @@ export function atualizarEsquema(db: AppDb, id: string, patch: PatchEsquema, ago
  */
 export function definirInicioCiclo(db: AppDb, id: string, dataInicioCiclo: Date, agora: Date = new Date()) {
   db.update(esquemas).set({ dataInicioCiclo, updatedAt: agora }).where(eq(esquemas.id, id)).run();
+  return buscarEsquemaPorId(db, id);
+}
+
+/**
+ * Volta à agenda (agenda-membership, decisão 3): o esquema recomeça como num
+ * cadastro feito agora — duração conta a partir de `dataInicio` e o cíclico
+ * volta a aguardar a nova cartela.
+ */
+export function reiniciarEsquema(db: AppDb, id: string, dataInicio: Date, agora: Date = new Date()) {
+  db.update(esquemas).set({ dataInicio, dataInicioCiclo: null, updatedAt: agora }).where(eq(esquemas.id, id)).run();
   return buscarEsquemaPorId(db, id);
 }
 
