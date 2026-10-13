@@ -31,6 +31,8 @@ export const medicamentos = sqliteTable('medicamentos', {
   quantidadeEmEstoque: integer('quantidade_em_estoque').notNull().default(0),
   quantidadePorEmbalagem: integer('quantidade_por_embalagem').notNull(),
   notificacoesAtivas: integer('notificacoes_ativas', { mode: 'boolean' }).notNull().default(true),
+  /** Fora da agenda: cadastrado e com histórico, mas sem doses, lembretes nem alertas (agenda-membership). */
+  naAgenda: integer('na_agenda', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),

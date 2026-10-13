@@ -1,7 +1,7 @@
 import { addDays, addHours, addMonths, startOfDay, startOfMonth } from 'date-fns';
 
 import { buscarProximaDoseAtiva, listarDosesDoIntervalo } from '@/db/repositories/doses';
-import { type EsquemaRow, listarEsquemasAtivos, paraEsquemaDominio } from '@/db/repositories/esquemas';
+import { type EsquemaRow, listarEsquemasAtivos, listarEsquemasNaoRemovidos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { StatusDose } from '@/db/schema';
@@ -155,8 +155,9 @@ export function montarCalendarioMensal(db: AppDb, mesReferencia: Date, hoje: Dat
     dias.set(dia.getTime(), { dia, itens: [] });
   }
 
+  // Histórico inclui medicamentos fora da agenda; a projeção futura, só os da agenda.
   const esquemas = listarEsquemasAtivos(db);
-  const esquemasPorId = new Map(esquemas.map((esquema) => [esquema.id, esquema]));
+  const esquemasPorId = new Map(listarEsquemasNaoRemovidos(db).map((esquema) => [esquema.id, esquema]));
   const medicamentosPorId = new Map<string, Medicamento | null>();
   function medicamentoDoEsquema(esquemaRow: EsquemaRow): Medicamento | null {
     let medicamento = medicamentosPorId.get(esquemaRow.medicamentoId);

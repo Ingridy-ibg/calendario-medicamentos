@@ -23,13 +23,15 @@ export function dosesRestantesDoTratamento(db: AppDb, esquema: Esquema, agora: D
   return (contarDosesRestantesDoTratamento(esquema, agora, null) ?? 0) + atrasadas;
 }
 
-/** `classificarEstoque` de um medicamento cadastrado, contando as doses restantes no banco. */
+/** `classificarEstoque` de um medicamento cadastrado, contando as doses restantes no banco; `null` fora da agenda. */
 export function alertaEstoqueDoMedicamento(
   db: AppDb,
   esquema: Esquema,
-  medicamento: { quantidadeEmEstoque: number; quantidadePorEmbalagem: number },
+  medicamento: { quantidadeEmEstoque: number; quantidadePorEmbalagem: number; naAgenda?: boolean },
   agora: Date,
 ): AlertaEstoque {
+  // Fora da agenda não tem alertas de estoque (agenda-membership).
+  if (medicamento.naAgenda === false) return null;
   return classificarEstoque(
     esquema,
     medicamento.quantidadeEmEstoque,

@@ -64,7 +64,7 @@ export function listarAlvosDesejados(db: AppDb, agora: Date): AlvoNotificacao[] 
     let medicamento = medicamentosPorId.get(esquemaRow.medicamentoId);
     if (!medicamento) {
       const encontrado = buscarMedicamentoPorId(db, esquemaRow.medicamentoId);
-      if (!encontrado || encontrado.deletedAt) return [];
+      if (!encontrado || encontrado.deletedAt || !encontrado.naAgenda) return [];
       medicamento = encontrado;
       medicamentosPorId.set(esquemaRow.medicamentoId, medicamento);
     }
@@ -84,7 +84,7 @@ export function listarAlvosDesejados(db: AppDb, agora: Date): AlvoNotificacao[] 
     let medicamento = medicamentosPorId.get(esquemaRow.medicamentoId);
     if (!medicamento) {
       const encontrado = buscarMedicamentoPorId(db, esquemaRow.medicamentoId);
-      if (!encontrado || encontrado.deletedAt) return [];
+      if (!encontrado || encontrado.deletedAt || !encontrado.naAgenda) return [];
       medicamento = encontrado;
       medicamentosPorId.set(esquemaRow.medicamentoId, medicamento);
     }

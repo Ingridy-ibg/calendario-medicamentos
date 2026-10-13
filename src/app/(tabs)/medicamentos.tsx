@@ -1,20 +1,23 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SeloEstoque } from '@/components/medicamento/selo-estoque';
+import { SeloForaDaAgenda } from '@/components/medicamento/selo-fora-da-agenda';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
 import { Cartao } from '@/components/ui/cartao';
 import { Icone } from '@/components/ui/icone';
+import { Segmentado } from '@/components/ui/segmentado';
 import { Tocavel } from '@/components/ui/tocavel';
 import { FAMILIA_TEXTO } from '@/constants/fontes';
 import { db } from '@/db/client';
 import { paraEsquemaDominio } from '@/db/repositories/esquemas';
-import { listarMedicamentosAtivosComEsquema } from '@/db/repositories/medicamentos';
+import { listarMedicamentosComEsquema } from '@/db/repositories/medicamentos';
 import { resumirEsquema, situacaoCiclo, textoSituacaoCiclo } from '@/domain/medication-management/gestao';
+import { type FiltroAgenda, filtrarEPaginar } from '@/domain/medication-management/lista';
 import { type AlertaEstoque, alertaForte, alertaVisivelNaLista, textoAlertaEstoque } from '@/domain/medication-stock/alerta';
 import { textoEstoque } from '@/domain/medication-stock/caixas';
 import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
@@ -30,10 +33,17 @@ interface ItemLista {
   estoque: string;
   alerta: AlertaEstoque;
   silenciado: boolean;
+  naAgenda: boolean;
 }
 
+const OPCOES_FILTRO = [
+  { valor: 'todos', rotulo: 'Todos' },
+  { valor: 'na_agenda', rotulo: 'Na agenda' },
+  { valor: 'fora_da_agenda', rotulo: 'Fora da agenda' },
+] as const;
+
 function montarLista(agora: Date): ItemLista[] {
-  return listarMedicamentosAtivosComEsquema(db).map(({ medicamento, esquema }) => {
+  return listarMedicamentosComEsquema(db).map(({ medicamento, esquema }) => {
     const dominio = paraEsquemaDominio(esquema);
     return {
       id: medicamento.id,
@@ -44,7 +54,9 @@ function montarLista(agora: Date): ItemLista[] {
       estoque: textoEstoque(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem, dominio.tipo === 'CICLICO'),
       alerta: alertaVisivelNaLista(alertaEstoqueDoMedicamento(db, dominio, medicamento, agora)),
       // "Se necessário" nunca tem lembrete, então "silenciado" não se aplica.
-      silenciado: !medicamento.notificacoesAtivas && dominio.tipo !== 'SE_NECESSARIO',
+      // Fora da agenda não tem lembretes, então "silenciado" também não se aplica.
+      silenciado: !medicamento.notificacoesAtivas && dominio.tipo !== 'SE_NECESSARIO' && medicamento.naAgenda,
+      naAgenda: medicamento.naAgenda,
     };
   });
 }
@@ -73,12 +85,12 @@ function Selo({ texto, icone }: { texto: string; icone?: 'sinoDesligado' }) {
   );
 }
 
-function LinhaMedicamento({ item, ultimo }: { item: ItemLista; ultimo: boolean }) {
+function LinhaMedicamento({ item, primeiro, ultimo }: { item: ItemLista; primeiro: boolean; ultimo: boolean }) {
   const theme = useTheme();
   return (
     <Tocavel
       accessibilityRole="button"
-      accessibilityLabel={`${item.nome}, ${item.dosagem}. ${item.resumo}. Estoque: ${item.estoque}${item.alerta ? `, ${textoAlertaEstoque(item.alerta)}` : ''}${item.silenciado ? ', notificações silenciadas' : ''}`}
+      accessibilityLabel={`${item.nome}, ${item.dosagem}. ${item.resumo}. Estoque: ${item.estoque}${item.alerta ? `, ${textoAlertaEstoque(item.alerta)}` : ''}${item.silenciado ? ', notificações silenciadas' : ''}${item.naAgenda ? '' : ', fora da agenda'}`}
       onPress={() => router.push({ pathname: '/medicamento/[id]', params: { id: item.id } })}
       style={{
         flexDirection: 'row',
@@ -88,6 +100,12 @@ function LinhaMedicamento({ item, ultimo }: { item: ItemLista; ultimo: boolean }
         minHeight: 72,
         borderBottomWidth: ultimo ? 0 : 1,
         borderBottomColor: theme.divider,
+        // A lista paginada é um cartão contínuo: só a primeira e a última linha arredondam.
+        backgroundColor: theme.surface,
+        borderTopLeftRadius: primeiro ? 22 : 0,
+        borderTopRightRadius: primeiro ? 22 : 0,
+        borderBottomLeftRadius: ultimo ? 22 : 0,
+        borderBottomRightRadius: ultimo ? 22 : 0,
       }}>
       <View
         style={{
@@ -124,55 +142,114 @@ function LinhaMedicamento({ item, ultimo }: { item: ItemLista; ultimo: boolean }
           </View>
         ) : null}
         {item.silenciado ? <Selo texto="Silenciado" icone="sinoDesligado" /> : null}
+        {!item.naAgenda ? (
+          <View style={{ marginTop: 4 }}>
+            <SeloForaDaAgenda />
+          </View>
+        ) : null}
       </View>
     </Tocavel>
   );
 }
 
-/** Aba Medicamentos (specs/medication-management): todos os medicamentos ativos, com ou sem dose hoje. */
+/**
+ * Aba Medicamentos (specs/medication-management): todos os medicamentos
+ * cadastrados, com filtro na agenda / fora da agenda e paginação de 20 em 20
+ * (agenda-membership, decisão 5).
+ */
 export default function MedicamentosScreen() {
   const theme = useTheme();
-  const [itens, setItens] = useState<ItemLista[]>([]);
+  const [todos, setTodos] = useState<ItemLista[]>([]);
+  const [filtro, setFiltro] = useState<FiltroAgenda>('todos');
+  const [filtroAberto, setFiltroAberto] = useState(false);
+  const [pagina, setPagina] = useState(1);
 
-  useFocusEffect(useCallback(() => setItens(montarLista(new Date())), []));
+  useFocusEffect(useCallback(() => setTodos(montarLista(new Date())), []));
+
+  const { itens, temMais } = useMemo(() => filtrarEPaginar(todos, filtro, pagina), [todos, filtro, pagina]);
+  const naAgenda = todos.filter((item) => item.naAgenda).length;
+  const filtroAplicado = filtro !== 'todos';
+
+  function escolherFiltro(novo: FiltroAgenda) {
+    setFiltro(novo);
+    setPagina(1);
+  }
+
+  const cabecalho = (
+    <View style={{ gap: 14, paddingBottom: 18 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <ThemedText type="small" themeColor="textSecondary">
+            {naAgenda === 1 ? '1 na agenda' : `${naAgenda} na agenda`}
+          </ThemedText>
+          <ThemedText type="display" accessibilityRole="header" numberOfLines={1}>
+            Medicamentos
+          </ThemedText>
+        </View>
+        {todos.length > 0 ? (
+          <Tocavel
+            accessibilityRole="button"
+            accessibilityLabel={filtroAplicado ? 'Filtro aplicado. Mostrar opções de filtro' : 'Mostrar opções de filtro'}
+            accessibilityState={{ expanded: filtroAberto }}
+            onPress={() => setFiltroAberto((aberto) => !aberto)}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: filtroAplicado ? theme.accentSoft : theme.surface,
+            }}>
+            <Icone nome="filtro" cor={filtroAplicado ? theme.onAccentSoft : theme.text} tamanho={20} />
+            {filtroAplicado ? (
+              <View style={{ position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent }} />
+            ) : null}
+          </Tocavel>
+        ) : null}
+        <Botao
+          rotulo="Novo"
+          icone="mais"
+          onPress={() => router.push('/medicamento/novo')}
+          style={{ borderRadius: 999, paddingLeft: 14, paddingRight: 18 }}
+        />
+      </View>
+      {filtroAberto ? <Segmentado opcoes={OPCOES_FILTRO} selecionado={filtro} onSelecionar={escolherFiltro} /> : null}
+    </View>
+  );
+
+  const vazio =
+    todos.length === 0 ? (
+      <Cartao style={{ alignItems: 'center', paddingVertical: 32, gap: 14 }}>
+        <Icone nome="pilula" cor={theme.textSecondary} tamanho={32} />
+        <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+          Você ainda não cadastrou nenhum medicamento.
+        </ThemedText>
+        <Botao rotulo="Cadastrar o primeiro" variante="suave" onPress={() => router.push('/medicamento/novo')} />
+      </Cartao>
+    ) : (
+      <Cartao style={{ alignItems: 'center', paddingVertical: 24 }}>
+        <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+          {filtro === 'na_agenda' ? 'Nenhum medicamento na agenda.' : 'Nenhum medicamento fora da agenda.'}
+        </ThemedText>
+      </Cartao>
+    );
 
   return (
     <ThemedView style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView contentContainerStyle={{ gap: 18, padding: 20, paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-            <View style={{ flex: 1, gap: 4 }}>
-              <ThemedText type="small" themeColor="textSecondary">
-                {itens.length === 1 ? '1 em uso' : `${itens.length} em uso`}
-              </ThemedText>
-              <ThemedText type="display" accessibilityRole="header" numberOfLines={1}>
-                Medicamentos
-              </ThemedText>
-            </View>
-            <Botao
-              rotulo="Novo"
-              icone="mais"
-              onPress={() => router.push('/medicamento/novo')}
-              style={{ borderRadius: 999, paddingLeft: 14, paddingRight: 18 }}
-            />
-          </View>
-
-          {itens.length === 0 ? (
-            <Cartao style={{ alignItems: 'center', paddingVertical: 32, gap: 14 }}>
-              <Icone nome="pilula" cor={theme.textSecondary} tamanho={32} />
-              <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-                Você ainda não cadastrou nenhum medicamento.
-              </ThemedText>
-              <Botao rotulo="Cadastrar o primeiro" variante="suave" onPress={() => router.push('/medicamento/novo')} />
-            </Cartao>
-          ) : (
-            <Cartao style={{ padding: 0, gap: 0 }}>
-              {itens.map((item, indice) => (
-                <LinhaMedicamento key={item.id} item={item} ultimo={indice === itens.length - 1} />
-              ))}
-            </Cartao>
-          )}
-        </ScrollView>
+        <FlatList
+          data={itens}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item, index }) => <LinhaMedicamento item={item} primeiro={index === 0} ultimo={index === itens.length - 1} />}
+          ListHeaderComponent={cabecalho}
+          ListEmptyComponent={vazio}
+          onEndReached={() => {
+            if (temMais) setPagina((atual) => atual + 1);
+          }}
+          onEndReachedThreshold={0.5}
+          contentContainerStyle={{ padding: 20, paddingBottom: 32 }}
+          contentInsetAdjustmentBehavior="automatic"
+        />
       </SafeAreaView>
     </ThemedView>
   );

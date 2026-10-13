@@ -6,6 +6,7 @@ import { Alert, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SeloEstoque } from '@/components/medicamento/selo-estoque';
+import { SeloForaDaAgenda } from '@/components/medicamento/selo-fora-da-agenda';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
@@ -30,12 +31,13 @@ import {
   situacaoCiclo,
   textoSituacaoCiclo,
 } from '@/domain/medication-management/gestao';
-import { removerMedicamentoComHistorico } from '@/domain/medication-registration/registration';
+import { prepararVoltaAAgenda, removerMedicamentoComHistorico, retirarDaAgenda } from '@/domain/medication-registration/registration';
 import { type AlertaEstoque, alertaForte, textoAlertaEstoque } from '@/domain/medication-stock/alerta';
 import { paraCaixas, textoEstoque } from '@/domain/medication-stock/caixas';
 import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
 import { useTheme } from '@/hooks/use-theme';
 import { reconciliarNotificacoesSeDisponivel } from '@/lib/notificacoes-seguras';
+import { useCadastroStore } from '@/state/cadastro-store';
 
 type Medicamento = NonNullable<ReturnType<typeof buscarMedicamentoPorId>>;
 
@@ -125,6 +127,7 @@ function UltimosDias({ adesao }: { adesao: AdesaoDias }) {
 /** Detalhe do medicamento (specs/medication-management): compra, notificações, editar e remover. */
 export default function DetalheMedicamentoScreen() {
   const theme = useTheme();
+  const definirCadastro = useCadastroStore((estado) => estado.definir);
   const { id } = useLocalSearchParams<{ id: string }>();
   const [dados, setDados] = useState<DadosDetalhe | null>(null);
 
@@ -153,6 +156,30 @@ export default function DetalheMedicamentoScreen() {
     definirNotificacoesAtivas(db, medicamento.id, ativas);
     await reconciliarNotificacoesSeDisponivel(db);
     recarregar();
+  }
+
+  function confirmarRetirada() {
+    Alert.alert(
+      `Retirar ${medicamento.nome} da agenda?`,
+      'As doses que ainda não foram registradas e os lembretes serão cancelados. O medicamento continua cadastrado, com o histórico.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Retirar',
+          onPress: async () => {
+            retirarDaAgenda(db, medicamento.id, new Date());
+            await reconciliarNotificacoesSeDisponivel(db);
+            recarregar();
+          },
+        },
+      ],
+    );
+  }
+
+  function abrirVoltaAAgenda() {
+    const { dados: dadosVolta, previa } = prepararVoltaAAgenda(db, medicamento.id, new Date());
+    definirCadastro(dadosVolta, previa, { tipo: 'volta_agenda', medicamentoId: medicamento.id });
+    router.push('/medicamento/confirmar');
   }
 
   function confirmarRemocao() {
@@ -204,6 +231,7 @@ export default function DetalheMedicamentoScreen() {
                   Prioridade {medicamento.criticidade === 'especial' ? 'especial' : 'comum'}
                 </ThemedText>
               </View>
+              {!medicamento.naAgenda ? <SeloForaDaAgenda /> : null}
             </View>
           </View>
 
@@ -257,7 +285,7 @@ export default function DetalheMedicamentoScreen() {
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  {textoPrevisao(previsao) ?? ''}
+                  {medicamento.naAgenda ? (textoPrevisao(previsao) ?? '') : 'Fora da agenda: sem previsão de consumo'}
                 </ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary">
                   {ciclico ? 'Cartela' : 'Caixa'} com {medicamento.quantidadePorEmbalagem}
@@ -277,7 +305,7 @@ export default function DetalheMedicamentoScreen() {
             />
           </Cartao>
 
-          {esquema.tipo !== 'SE_NECESSARIO' ? (
+          {esquema.tipo !== 'SE_NECESSARIO' && medicamento.naAgenda ? (
             <Cartao>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
                 <ThemedText style={{ fontFamily: FAMILIA_TEXTO[700] }}>Notificações</ThemedText>
@@ -297,9 +325,16 @@ export default function DetalheMedicamentoScreen() {
             </Cartao>
           ) : null}
 
-          <View style={{ alignItems: 'center', gap: 4, paddingTop: 10 }}>
-            <Botao rotulo="Remover medicamento" variante="perigo" icone="lixeira" onPress={confirmarRemocao} />
-            <ThemedText type="caption" themeColor="textSecondary">
+          <View style={{ gap: 8, paddingTop: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {medicamento.naAgenda ? (
+                <Botao rotulo="Retirar da agenda" variante="secundario" icone="calendario" onPress={confirmarRetirada} style={{ flex: 1 }} />
+              ) : (
+                <Botao rotulo="Adicionar à agenda" variante="suave" icone="calendario" onPress={abrirVoltaAAgenda} style={{ flex: 1 }} />
+              )}
+              <Botao rotulo="Excluir" variante="perigo" icone="lixeira" onPress={confirmarRemocao} style={{ flex: 1 }} />
+            </View>
+            <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
               O histórico de doses é mantido.
             </ThemedText>
           </View>

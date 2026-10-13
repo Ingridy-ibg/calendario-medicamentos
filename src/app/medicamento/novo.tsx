@@ -16,7 +16,7 @@ export default function NovoMedicamentoScreen() {
       titulo="Novo medicamento"
       rotuloSalvar="Continuar"
       aoSalvar={(dados) => {
-        definir(dados, prepararCadastro(dados, new Date()));
+        definir(dados, prepararCadastro(dados, new Date()), { tipo: 'cadastro' });
         router.push('/medicamento/confirmar');
       }}
     />

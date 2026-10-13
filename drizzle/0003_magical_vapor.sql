@@ -1,0 +1,1 @@
+ALTER TABLE `medicamentos` ADD `na_agenda` integer DEFAULT true NOT NULL;
