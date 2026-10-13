@@ -29,6 +29,7 @@ import { type DiaCalendario, type ItemDiaCalendario, montarCalendarioMensal } fr
 import { type MarcadorDia, marcadorDoDia } from '@/domain/agenda-views/marcador-dia';
 import { useTheme } from '@/hooks/use-theme';
 import { Tocavel } from '@/components/ui/tocavel';
+import { useDadosStore } from '@/state/dados-store';
 
 const ROTULOS_DIA_SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
@@ -118,13 +119,15 @@ export default function CalendarioMensalScreen() {
   const [diaSelecionado, setDiaSelecionado] = useState(() => new Date());
   const [hoje, setHoje] = useState(() => new Date());
   const [dias, setDias] = useState<DiaCalendario[]>([]);
+  // Resposta de notificação aplicada com a tela aberta (fix-permissoes-e-respostas).
+  const versaoDados = useDadosStore((estado) => estado.versaoDados);
 
   const recarregar = useCallback(() => {
     const agora = new Date();
     marcarPerdidasPorTempo(db, agora);
     setHoje(agora);
     setDias(montarCalendarioMensal(db, mesReferencia, agora));
-  }, [mesReferencia]);
+  }, [mesReferencia, versaoDados]);
 
   useFocusEffect(recarregar);
 

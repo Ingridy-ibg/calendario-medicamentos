@@ -38,20 +38,6 @@ export async function solicitarPermissaoAlarmeExato(): Promise<void> {
 }
 
 /**
- * Isenção de otimização de bateria: sem ela, o Doze/App Standby podem
- * atrasar os alarmes de reenvio (ver risco em design.md). Também só existe
- * como fluxo de Configurações, nunca um diálogo direto do app.
- */
-export async function solicitarIsencaoOtimizacaoBateria(): Promise<void> {
-  if (Platform.OS !== 'android') {
-    return;
-  }
-  await startActivityAsync(ActivityAction.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, {
-    data: `package:${nomeDoPacote()}`,
-  });
-}
-
-/**
  * Full-screen intent (`USE_FULL_SCREEN_INTENT`): declarada em app.json e
  * concedida automaticamente na instalação até o Android 13. A partir do
  * Android 14 (API 34), o usuário precisa revisá-la manualmente numa tela de
@@ -68,16 +54,16 @@ export async function solicitarPermissaoFullScreenIntent(): Promise<void> {
 }
 
 /**
- * Fluxo da primeira abertura relevante do app (5.1): tudo que não depende de
- * um medicamento específico ainda existir. A permissão de full-screen intent
- * (5.2) é pedida separadamente, no primeiro cadastro de um medicamento
- * especial — ver `solicitarPermissaoFullScreenIntent` chamada a partir de
- * `src/app/medicamento/novo.tsx`.
+ * Pedido único da boas-vindas ("Ativar lembretes e começar", specs/onboarding)
+ * — nenhum outro lugar chama isto. Sem isenção de otimização de bateria: os
+ * alarmes de dose já disparam no Doze (fix-permissoes-e-respostas, design.md).
+ * A permissão de full-screen intent (5.2) é pedida separadamente, no primeiro
+ * cadastro de um medicamento especial — ver `solicitarPermissaoFullScreenIntent`
+ * chamada a partir de `src/app/medicamento/novo.tsx`.
  */
 export async function solicitarPermissoesEssenciais(): Promise<void> {
   await solicitarPermissaoPostNotifications();
   await solicitarPermissaoAlarmeExato();
-  await solicitarIsencaoOtimizacaoBateria();
 }
 
 export interface SituacaoPermissoes {

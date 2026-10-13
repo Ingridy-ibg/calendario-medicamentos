@@ -38,6 +38,7 @@ import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
 import { useTheme } from '@/hooks/use-theme';
 import { reconciliarNotificacoesSeDisponivel } from '@/lib/notificacoes-seguras';
 import { useCadastroStore } from '@/state/cadastro-store';
+import { useDadosStore } from '@/state/dados-store';
 
 type Medicamento = NonNullable<ReturnType<typeof buscarMedicamentoPorId>>;
 
@@ -130,6 +131,8 @@ export default function DetalheMedicamentoScreen() {
   const definirCadastro = useCadastroStore((estado) => estado.definir);
   const { id } = useLocalSearchParams<{ id: string }>();
   const [dados, setDados] = useState<DadosDetalhe | null>(null);
+  // Resposta de notificação aplicada com a tela aberta (fix-permissoes-e-respostas).
+  const versaoDados = useDadosStore((estado) => estado.versaoDados);
 
   const recarregar = useCallback(() => {
     const novos = carregar(id, new Date());
@@ -138,7 +141,7 @@ export default function DetalheMedicamentoScreen() {
       return;
     }
     setDados(novos);
-  }, [id]);
+  }, [id, versaoDados]);
 
   useFocusEffect(recarregar);
 

@@ -37,6 +37,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { reconciliarNotificacoesSeDisponivel } from '@/lib/notificacoes-seguras';
 import { usePreferencias } from '@/lib/preferencias';
 import { Tocavel } from '@/components/ui/tocavel';
+import { useDadosStore } from '@/state/dados-store';
 
 /** Nome/área de informação de cada item leva ao detalhe (manage-medications, 6.1). */
 function abrirDetalhe(medicamentoId: string) {
@@ -276,13 +277,15 @@ export default function AgendaDoDiaScreen() {
   const nome = usePreferencias((estado) => estado.nome);
   const [itens, setItens] = useState<ItemAgenda[]>([]);
   const [hoje, setHoje] = useState(new Date());
+  // Resposta de notificação aplicada com a tela aberta (fix-permissoes-e-respostas).
+  const versaoDados = useDadosStore((estado) => estado.versaoDados);
 
   const recarregar = useCallback(() => {
     const agora = new Date();
     marcarPerdidasPorTempo(db, agora);
     setHoje(agora);
     setItens(montarAgendaDoDia(db, agora));
-  }, []);
+  }, [versaoDados]);
 
   useFocusEffect(recarregar);
 

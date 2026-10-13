@@ -3,9 +3,12 @@ import { buscarDosePorId, listarDosesAguardandoVencidas, marcarDosePerdida, reag
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { Criticidade } from '@/db/schema';
+import { confirmarDose, pularDose } from '@/domain/adherence-history/resolucao';
+import type { Esquema } from '@/domain/dose-scheduling/types';
 
 import { adiarNotificacao, decidirAposEntrega } from './cascata';
 import type { DecisaoEntrega } from './cascata';
+import type { AcaoNotificacao } from './types';
 
 function exigirDose(db: AppDb, doseId: string) {
   const dose = buscarDosePorId(db, doseId);
@@ -13,6 +16,47 @@ function exigirDose(db: AppDb, doseId: string) {
     throw new Error(`Dose ${doseId} não encontrada`);
   }
   return dose;
+}
+
+export type ResultadoResposta =
+  | { tipo: 'ignorada' }
+  | { tipo: 'resolvida' }
+  | { tipo: 'adiada'; proximaNotificacaoEm: Date };
+
+/**
+ * Aplica a ação tocada numa notificação de dose. Só age sobre dose ainda não
+ * resolvida (`pendente`/`aguardando`): a mesma resposta pode chegar pela
+ * tarefa de fundo e pelo ouvinte do app aberto, ou atrasada para uma dose já
+ * resolvida na agenda — nesses casos nada muda, nem status nem estoque
+ * (fix-permissoes-e-respostas). Especial só aceita "tomei agora"
+ * (specs/dose-notifications): outra ação é ignorada, nunca aplicada.
+ */
+export function aplicarRespostaDeNotificacao(
+  db: AppDb,
+  esquema: Esquema,
+  criticidade: Criticidade,
+  doseId: string,
+  acao: AcaoNotificacao,
+  agora: Date,
+): ResultadoResposta {
+  const dose = buscarDosePorId(db, doseId);
+  if (!dose || (dose.status !== 'pendente' && dose.status !== 'aguardando')) return { tipo: 'ignorada' };
+  if (criticidade === 'especial' && acao !== 'tomei_agora') return { tipo: 'ignorada' };
+
+  switch (acao) {
+    case 'tomei_agora':
+      confirmarDose(db, esquema, doseId, agora);
+      return { tipo: 'resolvida' };
+    case 'nao_tomar':
+      pularDose(db, esquema, doseId, agora);
+      return { tipo: 'resolvida' };
+    case 'adiar': {
+      const adiada = adiarDoseViaNotificacao(db, doseId, agora);
+      return adiada?.proximaNotificacaoEm
+        ? { tipo: 'adiada', proximaNotificacaoEm: adiada.proximaNotificacaoEm }
+        : { tipo: 'ignorada' };
+    }
+  }
 }
 
 /**

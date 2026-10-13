@@ -45,7 +45,8 @@ function EtapaApresentacao({ aoAvancar }: { aoAvancar: () => void }) {
   async function ativarLembretes() {
     setPedindo(true);
     // A flag é gravada antes dos pedidos: negar, ou fechar o app no meio de um
-    // diálogo ou na etapa seguinte, não traz a boas-vindas de volta.
+    // diálogo ou na etapa seguinte, não traz a boas-vindas de volta. Este é o
+    // único pedido automático de permissões do app (specs/onboarding).
     gravarBoasVindasConcluida();
     try {
       if (!isExpoGo) {

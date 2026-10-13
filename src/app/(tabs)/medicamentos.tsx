@@ -22,6 +22,7 @@ import { type AlertaEstoque, alertaForte, alertaVisivelNaLista, textoAlertaEstoq
 import { textoEstoque } from '@/domain/medication-stock/caixas';
 import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
 import { useTheme } from '@/hooks/use-theme';
+import { useDadosStore } from '@/state/dados-store';
 
 interface ItemLista {
   id: string;
@@ -145,6 +146,8 @@ export default function MedicamentosScreen() {
   const [contagem, setContagem] = useState({ total: 0, naAgenda: 0 });
   const [filtro, setFiltro] = useState<FiltroAgenda>('todos');
   const [filtroAberto, setFiltroAberto] = useState(false);
+  // Resposta de notificação aplicada com a tela aberta (fix-permissoes-e-respostas).
+  const versaoDados = useDadosStore((estado) => estado.versaoDados);
 
   // Quantos itens já foram pedidos, atualizado na hora: dois `onEndReached` antes
   // do re-render não pedem a mesma página (fix-agenda-membership-review-2, decisão 4).
@@ -161,7 +164,7 @@ export default function MedicamentosScreen() {
       pedidos.current = carregados.length;
       setContagem(contarMedicamentos(db));
       setItens(carregados);
-    }, [filtro]),
+    }, [filtro, versaoDados]),
   );
 
   const filtroAplicado = filtro !== 'todos';

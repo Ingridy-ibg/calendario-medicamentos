@@ -3,12 +3,17 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb, type TestDb } from '@/db/create-test-db';
 import { buscarDosePorId, inserirDose } from '@/db/repositories/doses';
 import { inserirEsquema } from '@/db/repositories/esquemas';
-import { inserirMedicamento } from '@/db/repositories/medicamentos';
+import { buscarMedicamentoPorId, inserirMedicamento } from '@/db/repositories/medicamentos';
 import type { Criticidade } from '@/db/schema';
 import { confirmarDose } from '@/domain/adherence-history/resolucao';
 import type { EsquemaDiario } from '@/domain/dose-scheduling/types';
 
-import { adiarDoseViaNotificacao, fecharDosesVencidas, registrarEntregaDeNotificacao } from './resolucao-por-notificacao';
+import {
+  adiarDoseViaNotificacao,
+  aplicarRespostaDeNotificacao,
+  fecharDosesVencidas,
+  registrarEntregaDeNotificacao,
+} from './resolucao-por-notificacao';
 
 function criarDose(db: TestDb, criticidade: Criticidade = 'comum') {
   const medicamentoId = inserirMedicamento(db, {
@@ -131,5 +136,56 @@ describe('reenvio infinito do especial (5.7)', () => {
 
     expect(fecharDosesVencidas(db, agora)).toEqual([]);
     expect(buscarDosePorId(db, dose.id)?.status).not.toBe('perdida');
+  });
+});
+
+describe('aplicarRespostaDeNotificacao (fix-permissoes-e-respostas)', () => {
+  let db: TestDb;
+  beforeEach(() => (db = createTestDb()));
+
+  it('"tomei agora" repetido registra a dose e desconta o estoque uma única vez', () => {
+    const { esquema, dose } = criarDose(db);
+    const primeira = new Date(2026, 0, 1, 8, 5);
+
+    expect(aplicarRespostaDeNotificacao(db, esquema, 'comum', dose.id, 'tomei_agora', primeira)).toEqual({ tipo: 'resolvida' });
+    const depois = buscarDosePorId(db, dose.id)!;
+    const estoque = buscarMedicamentoPorId(db, esquema.medicamentoId)!.quantidadeEmEstoque;
+
+    expect(
+      aplicarRespostaDeNotificacao(db, esquema, 'comum', dose.id, 'tomei_agora', new Date(2026, 0, 1, 8, 40)),
+    ).toEqual({ tipo: 'ignorada' });
+    expect(buscarDosePorId(db, dose.id)).toEqual(depois);
+    expect(buscarMedicamentoPorId(db, esquema.medicamentoId)!.quantidadeEmEstoque).toBe(estoque);
+    expect(estoque).toBe(99);
+  });
+
+  it('ignora resposta atrasada para dose já pulada', () => {
+    const { esquema, dose } = criarDose(db);
+    aplicarRespostaDeNotificacao(db, esquema, 'comum', dose.id, 'nao_tomar', new Date(2026, 0, 1, 8, 5));
+
+    expect(
+      aplicarRespostaDeNotificacao(db, esquema, 'comum', dose.id, 'tomei_agora', new Date(2026, 0, 1, 8, 10)),
+    ).toEqual({ tipo: 'ignorada' });
+    expect(buscarDosePorId(db, dose.id)!.status).toBe('pulada');
+  });
+
+  it('"adiar" reagenda +30 min e mantém a dose aberta', () => {
+    const { esquema, dose } = criarDose(db);
+    const agora = new Date(2026, 0, 1, 8, 5);
+
+    expect(aplicarRespostaDeNotificacao(db, esquema, 'comum', dose.id, 'adiar', agora)).toEqual({
+      tipo: 'adiada',
+      proximaNotificacaoEm: new Date(2026, 0, 1, 8, 35),
+    });
+    expect(buscarDosePorId(db, dose.id)!.status).toBe('aguardando');
+  });
+
+  it('especial ignora qualquer ação que não seja "tomei agora"', () => {
+    const { esquema, dose } = criarDose(db, 'especial');
+
+    expect(
+      aplicarRespostaDeNotificacao(db, esquema, 'especial', dose.id, 'nao_tomar', new Date(2026, 0, 1, 8, 5)),
+    ).toEqual({ tipo: 'ignorada' });
+    expect(buscarDosePorId(db, dose.id)!.status).toBe('pendente');
   });
 });

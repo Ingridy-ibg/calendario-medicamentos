@@ -5,13 +5,22 @@ import {
   type NotificationTaskPayload,
   registerTaskAsync as registerBackgroundNotificationTaskAsync,
 } from 'expo-notifications';
+import Storage from 'expo-sqlite/kv-store';
 import * as TaskManager from 'expo-task-manager';
 
 import { db } from '@/db/client';
-import { confirmarDose, pularDose } from '@/domain/adherence-history/resolucao';
 import { analisarIdentificador } from '@/domain/dose-notifications/reconciliador';
-import { adiarDoseViaNotificacao, registrarEntregaDeNotificacao } from '@/domain/dose-notifications/resolucao-por-notificacao';
+import {
+  aplicarRespostaDeNotificacao,
+  registrarEntregaDeNotificacao,
+} from '@/domain/dose-notifications/resolucao-por-notificacao';
+import {
+  chaveDaResposta,
+  lerRespostasLembradas,
+  registrarResposta,
+} from '@/domain/dose-notifications/respostas-processadas';
 import type { AcaoNotificacao } from '@/domain/dose-notifications/types';
+import { useDadosStore } from '@/state/dados-store';
 
 import { agendarAlvo, cancelarAlvo } from './agendamento';
 import { buscarContextoDaDose } from './contexto';
@@ -21,6 +30,7 @@ import { renovarJanelasAtivas } from '@/domain/dose-scheduling/janela-rolante';
 
 export const TAREFA_NOTIFICACAO = 'TAREFA_NOTIFICACAO_DOSE';
 export const TAREFA_RECONCILIACAO_PERIODICA = 'TAREFA_RECONCILIACAO_PERIODICA';
+const CHAVE_RESPOSTAS_PROCESSADAS = 'notificacoes.respostasProcessadas';
 
 function ehResposta(payload: NotificationTaskPayload): payload is NotificationResponse {
   return 'actionIdentifier' in payload;
@@ -31,48 +41,58 @@ function ehAcaoValida(id: string): id is AcaoNotificacao {
 }
 
 /**
- * Uma dose comum "não tomar"/"adiar" nunca aparece para especial — se a
- * ação chegar mesmo assim (não deveria, a categoria registrada não oferece
- * o botão), ela é ignorada em vez de aplicada, para nunca marcar como
- * pulada/perdida algo que specs/dose-notifications proíbe para especiais.
+ * Marca a resposta como processada e diz se ela já tinha sido. A mesma
+ * resposta pode chegar duas vezes — pela tarefa de fundo e pelo ouvinte do
+ * app aberto, ou de novo como "última resposta" ao reabrir o app — e o
+ * "adiar" deixa a dose aberta, então o status sozinho não o barra.
  */
-async function processarResposta(response: NotificationResponse) {
-  const analisado = analisarIdentificador(response.notification.request.identifier);
+function jaFoiProcessada(response: NotificationResponse): boolean {
+  const chave = chaveDaResposta(
+    response.notification.request.identifier,
+    response.actionIdentifier,
+    response.notification.date,
+  );
+  const atual = lerRespostasLembradas(Storage.getItemSync(CHAVE_RESPOSTAS_PROCESSADAS));
+  const { jaProcessada, lembradas } = registrarResposta(atual, chave);
+  if (!jaProcessada) Storage.setItemSync(CHAVE_RESPOSTAS_PROCESSADAS, JSON.stringify(lembradas));
+  return jaProcessada;
+}
+
+/**
+ * Aplica a ação tocada numa notificação de dose, venha ela da tarefa de
+ * fundo (app em segundo plano ou fechado) ou do ouvinte registrado em
+ * `inicializar.ts` (app aberto). No máximo uma vez por resposta
+ * (`jaFoiProcessada` + `aplicarRespostaDeNotificacao`, que ignora dose já
+ * resolvida e ações que o especial não oferece).
+ */
+export async function processarResposta(response: NotificationResponse): Promise<void> {
+  const identifier = response.notification.request.identifier;
+  const analisado = analisarIdentificador(identifier);
   if (!analisado || analisado.tipo !== 'dose') return; // lembrete de pausa não tem ação — um toque nele só abre o app.
 
   if (response.actionIdentifier === DEFAULT_ACTION_IDENTIFIER) return; // toque simples só abre o app.
   if (!ehAcaoValida(response.actionIdentifier)) return;
+  if (jaFoiProcessada(response)) return;
 
   const { doseId } = analisado;
-  const agora = new Date();
   const contexto = buscarContextoDaDose(db, doseId);
   if (!contexto) return; // dose/medicamento removido antes da resposta chegar.
 
-  if (contexto.medicamento.criticidade === 'especial' && response.actionIdentifier !== 'tomei_agora') {
-    return;
-  }
+  const resultado = aplicarRespostaDeNotificacao(
+    db,
+    contexto.esquema,
+    contexto.medicamento.criticidade,
+    doseId,
+    response.actionIdentifier,
+    new Date(),
+  );
 
-  switch (response.actionIdentifier) {
-    case 'tomei_agora':
-      confirmarDose(db, contexto.esquema, doseId, agora);
-      await cancelarAlvo(response.notification.request.identifier);
-      break;
-    case 'nao_tomar':
-      pularDose(db, contexto.esquema, doseId, agora);
-      await cancelarAlvo(response.notification.request.identifier);
-      break;
-    case 'adiar': {
-      const resultado = adiarDoseViaNotificacao(db, doseId, agora);
-      if (resultado) {
-        await agendarAlvo(db, {
-          identifier: response.notification.request.identifier,
-          tipo: 'dose',
-          dataHora: resultado.proximaNotificacaoEm!,
-        });
-      }
-      break;
-    }
+  if (resultado.tipo === 'resolvida') {
+    await cancelarAlvo(identifier);
+  } else if (resultado.tipo === 'adiada') {
+    await agendarAlvo(db, { identifier, tipo: 'dose', dataHora: resultado.proximaNotificacaoEm });
   }
+  if (resultado.tipo !== 'ignorada') useDadosStore.getState().avisarDadosMudaram();
 }
 
 /**
@@ -102,9 +122,11 @@ async function processarEntrega(payload: Exclude<NotificationTaskPayload, Notifi
 
 /**
  * Define e registra a tarefa de notificação em segundo plano — precisa
- * rodar no escopo do módulo (não dentro de um componente), carregada cedo
- * pelo app (ver `src/app/_layout.tsx`), para que `expo-task-manager` consiga
- * invocá-la mesmo com o app em segundo plano ou encerrado (design.md).
+ * rodar no escopo do módulo (não dentro de um componente) e ser carregada
+ * pelo arquivo de entrada (`index.ts` na raiz), antes do expo-router: numa
+ * inicialização sem interface (ação tocada com o app fechado) o layout não
+ * chega a ser avaliado, e uma tarefa não definida descarta a resposta
+ * (fix-permissoes-e-respostas, design.md).
  */
 if (!TaskManager.isTaskDefined(TAREFA_NOTIFICACAO)) {
   TaskManager.defineTask<NotificationTaskPayload>(TAREFA_NOTIFICACAO, async ({ data, error }) => {

@@ -18,12 +18,18 @@ export async function reconciliarNotificacoesSeDisponivel(db: AppDb): Promise<vo
  * Diz se a abertura atual veio de um toque numa notificação e "consome" essa
  * resposta, para que a próxima abertura comum não seja confundida com ela
  * (add-daily-greeting: a saudação não aparece quando o app abre por
- * notificação). Sempre `false` no Expo Go.
+ * notificação). Antes de limpar, aplica a resposta — se a abertura veio de
+ * uma ação, ela ainda pode não ter sido processada; `processarResposta` é
+ * idempotente, então não há efeito duplo se o ouvinte ou a tarefa já a
+ * aplicaram (fix-permissoes-e-respostas). Sempre `false` no Expo Go.
  */
 export async function consumirAberturaPorNotificacao(): Promise<boolean> {
   if (isExpoGo) return false;
   const { getLastNotificationResponse, clearLastNotificationResponseAsync } = await import('expo-notifications');
-  if (!getLastNotificationResponse()) return false;
+  const resposta = getLastNotificationResponse();
+  if (!resposta) return false;
+  const { processarResposta } = await import('@/notifications/tarefas');
+  await processarResposta(resposta);
   await clearLastNotificationResponseAsync();
   return true;
 }

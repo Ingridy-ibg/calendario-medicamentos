@@ -81,11 +81,10 @@ export default function RootLayout() {
   useEffect(() => {
     if (!success || isExpoGo) return;
     // Import dinâmico, nunca estático: só de importar `expo-notifications` já
-    // lança uma exceção dentro do Expo Go (ver `lib/expo-go.ts`). Enquanto a
-    // boas-vindas não foi concluída, nenhuma permissão é pedida aqui — é ela
-    // que faz o primeiro pedido (specs/onboarding).
-    const pedirPermissoes = usePreferencias.getState().boasVindasConcluida;
-    import('@/notifications').then(({ inicializarNotificacoes }) => inicializarNotificacoes({ pedirPermissoes }));
+    // lança uma exceção dentro do Expo Go (ver `lib/expo-go.ts`). Nenhuma
+    // permissão é pedida aqui: o único pedido automático é o da boas-vindas
+    // (specs/onboarding).
+    import('@/notifications').then(({ inicializarNotificacoes }) => inicializarNotificacoes());
   }, [success]);
 
   if (error) {
