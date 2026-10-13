@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTestDb, type TestDb } from '@/db/create-test-db';
-import { inserirDose } from '@/db/repositories/doses';
-import { inserirEsquema } from '@/db/repositories/esquemas';
+import { inserirDose, listarDosesPorEsquema } from '@/db/repositories/doses';
+import { buscarEsquemaPorId, inserirEsquema, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { inserirMedicamento } from '@/db/repositories/medicamentos';
 import { confirmarDose } from '@/domain/adherence-history/resolucao';
 import type { EsquemaDiario } from '@/domain/dose-scheduling/types';
+import { cadastrarMedicamento } from '@/domain/medication-registration/registration';
 
 import { montarCalendarioMensal } from './calendario-mensal';
+import { marcadorDoDia } from './marcador-dia';
 
 // Agosto de 2026 inteiro tem 31 dias.
 const HOJE = new Date(2026, 7, 15, 9, 0);
@@ -45,14 +47,21 @@ describe('montarCalendarioMensal', () => {
       dataInicio: new Date(2026, 7, 10),
     };
     const dose = inserirDose(db, { esquemaId, dataHoraPrevista: new Date(2026, 7, 10, 8, 0) });
-    // Confirmada com atraso, às 9h em vez de 8h.
+    // Confirmada com atraso, às 9h30 em vez de 8h (mais de 30 min depois).
     confirmarDose(db, esquema, dose.id, new Date(2026, 7, 10, 9, 30));
 
     const calendario = montarCalendarioMensal(db, HOJE, HOJE);
     const dia10 = encontrarDia(calendario, new Date(2026, 7, 10));
 
     expect(dia10?.itens).toEqual([
-      { tipo: 'historico', medicamentoId, nome: 'Losartana', horario: new Date(2026, 7, 10, 8, 0), status: 'tomada' },
+      {
+        tipo: 'historico',
+        medicamentoId,
+        nome: 'Losartana',
+        horario: new Date(2026, 7, 10, 8, 0),
+        status: 'tomada_com_atraso',
+        atrasada: false,
+      },
     ]);
   });
 
@@ -117,9 +126,16 @@ describe('montarCalendarioMensal', () => {
 
     const calendario = montarCalendarioMensal(db, HOJE, HOJE);
 
-    // 14h + 8h = 22h (ainda hoje), +8h = 6h (16/8), +8h = 14h (16/8)...
+    // Hoje: a dose real das 14h (pendente) + a estimada das 22h; depois 6h, 14h, 22h (16/8)...
     expect(encontrarDia(calendario, new Date(2026, 7, 15))?.itens).toEqual([
-      { tipo: 'previsto', medicamentoId, nome: 'Analgésico forte', horario: new Date(2026, 7, 15, 14, 0), estimado: true },
+      {
+        tipo: 'historico',
+        medicamentoId,
+        nome: 'Analgésico forte',
+        horario: new Date(2026, 7, 15, 14, 0),
+        status: 'pendente',
+        atrasada: false,
+      },
       { tipo: 'previsto', medicamentoId, nome: 'Analgésico forte', horario: new Date(2026, 7, 15, 22, 0), estimado: true },
     ]);
     expect(encontrarDia(calendario, new Date(2026, 7, 16))?.itens).toEqual([
@@ -142,5 +158,39 @@ describe('montarCalendarioMensal', () => {
     const calendario = montarCalendarioMensal(db, HOJE, HOJE);
 
     expect(calendario.every((dia) => dia.itens.length === 0)).toBe(true);
+  });
+});
+
+describe('montarCalendarioMensal — hoje com as doses reais e atrasadas', () => {
+  const comuns = { nome: 'L', dosagem: '1', quantidadeEmEstoque: 30, quantidadePorEmbalagem: 30 };
+  const diario = { tipo: 'DIARIO' as const, horarios: ['08:00'], duracao: { modo: 'continuo' as const } };
+  const diaDe = (dias: ReturnType<typeof montarCalendarioMensal>, n: number) => dias.find((d) => d.dia.getDate() === n)!;
+
+  it('dose de hoje tomada às 08:05: histórico tomada e ponto cheio de tomada', () => {
+    const db = createTestDb();
+    const { esquema } = cadastrarMedicamento(db, { comuns: { ...comuns, criticidade: 'comum' }, esquema: diario }, new Date(2026, 9, 12, 7));
+    const dominio = paraEsquemaDominio(buscarEsquemaPorId(db, esquema.id)!);
+    const dose = listarDosesPorEsquema(db, esquema.id).find((d) => d.dataHoraPrevista!.getDate() === 12)!;
+    confirmarDose(db, dominio, dose.id, new Date(2026, 9, 12, 8, 5));
+
+    const hoje = diaDe(montarCalendarioMensal(db, new Date(2026, 9, 1), new Date(2026, 9, 12, 10)), 12);
+    expect(hoje.itens).toMatchObject([{ tipo: 'historico', status: 'tomada', atrasada: false }]);
+    expect(marcadorDoDia(hoje.itens)).toEqual({ token: 'statusTomada', estilo: 'cheio' });
+  });
+
+  it('às 07:00 a dose de hoje aparece pendente, em contorno', () => {
+    const db = createTestDb();
+    cadastrarMedicamento(db, { comuns: { ...comuns, criticidade: 'comum' }, esquema: diario }, new Date(2026, 9, 12, 6));
+    const hoje = diaDe(montarCalendarioMensal(db, new Date(2026, 9, 1), new Date(2026, 9, 12, 7)), 12);
+    expect(hoje.itens).toMatchObject([{ tipo: 'historico', status: 'pendente', atrasada: false }]);
+    expect(marcadorDoDia(hoje.itens)).toEqual({ token: 'accent', estilo: 'contorno' });
+  });
+
+  it('especial de ontem sem resposta: atrasada, contorno âmbar', () => {
+    const db = createTestDb();
+    cadastrarMedicamento(db, { comuns: { ...comuns, criticidade: 'especial' }, esquema: diario }, new Date(2026, 9, 11, 7));
+    const ontem = diaDe(montarCalendarioMensal(db, new Date(2026, 9, 1), new Date(2026, 9, 12, 10)), 11);
+    expect(ontem.itens).toMatchObject([{ tipo: 'historico', status: 'pendente', atrasada: true }]);
+    expect(marcadorDoDia(ontem.itens)).toEqual({ token: 'statusAtraso', estilo: 'contorno' });
   });
 });

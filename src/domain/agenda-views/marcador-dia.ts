@@ -19,11 +19,15 @@ const ORDEM: { status: StatusDose; token: ThemeColor }[] = [
 
 /**
  * Marcador de um dia no calendário mensal (specs/agenda-views): ponto
- * preenchido na cor do pior status registrado; ponto em contorno quando só há
+ * preenchido na cor do pior status registrado; contorno âmbar quando há dose
+ * atrasada (e nenhuma perdida); ponto em contorno quando só há
  * doses previstas/pendentes; ponto cinza em contorno para dia de pausa.
  */
 export function marcadorDoDia(itens: ItemDiaCalendario[]): MarcadorDia | null {
   const historico = itens.filter((item) => item.tipo === 'historico');
+  if (historico.some((item) => item.status === 'perdida')) return { token: 'statusPerdida', estilo: 'cheio' };
+  // Dose ainda sem resposta e já atrasada: contorno âmbar (fix-late-and-calendar-status).
+  if (historico.some((item) => item.atrasada)) return { token: 'statusAtraso', estilo: 'contorno' };
   for (const { status, token } of ORDEM) {
     if (historico.some((item) => item.status === status)) return { token, estilo: 'cheio' };
   }

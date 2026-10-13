@@ -17,6 +17,7 @@ function dose(nome: string, hora: string | null, status: StatusDose): ItemAgenda
     horario: hora ? new Date(2026, 9, 12, h, m) : null,
     status,
     horarioRegistro: null,
+    atrasada: false,
     posicaoCiclo: null,
     alertaEstoque: false,
   };

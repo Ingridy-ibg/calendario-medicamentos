@@ -33,6 +33,9 @@ Função de domínio que percorre as doses não resolvidas com horário previsto
 ### 4. Calendário: hoje como histórico
 `montarCalendarioMensal` passa a ler `doses` até o **fim de hoje** (não o início) e a projetar o esquema só a partir de amanhã. Itens não resolvidos de hoje entram como histórico pendente (com `atrasada`). `marcadorDoDia`: ordem perdida > pulada > atraso (tomada com atraso **ou** atrasada) > tomada; atrasada sem nenhuma resolvida pior → contorno âmbar; só pendentes no horário → contorno de destaque. Legenda ganha "Atrasada" (contorno âmbar).
 
+### Nota da implementação: intervalo em horas hoje
+As doses de hoje de um intervalo em horas depois da próxima pendente só existem como estimativa (a grade real é gerada dose a dose). Por isso, para esse tipo, a projeção continua começando hoje; uma estimativa no mesmo horário de uma dose real é descartada. Resultado em hoje: a dose real (com seu status) + as estimadas restantes.
+
 ## Risks / Trade-offs
 
 - [Mudar a assinatura de `classificarResposta` quebrar a resposta por notificação] → o caminho de notificação passa a mesma dose e o horário da resposta; testes existentes de `resolucao-por-notificacao` cobrem.

@@ -5,6 +5,7 @@ import { listarEsquemasAtivos, paraEsquemaDominio } from '@/db/repositories/esqu
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { StatusDose } from '@/db/schema';
+import { estaAtrasada } from '@/domain/adherence-history/classificacao';
 import { calcularStatusDoDia } from '@/domain/dose-scheduling/ciclico';
 import { combinarDataEHorario } from '@/domain/dose-scheduling/horario';
 import { temAlertaDeRecompra } from '@/domain/medication-stock/alerta';
@@ -20,6 +21,8 @@ export interface ItemAgendaDose {
   status: StatusDose;
   /** Quando a dose foi resolvida (ex.: horário real de uma tomada com atraso). */
   horarioRegistro: Date | null;
+  /** Não resolvida e mais de 30 min depois do horário (fix-late-and-calendar-status). */
+  atrasada: boolean;
   /** Só para CICLICO com dose hoje — dia de pausa não tem dose para confirmar (ver `dose-scheduling/ciclico.ts`). */
   posicaoCiclo: { dia: number; totalDiasAtivos: number } | null;
   alertaEstoque: boolean;
@@ -86,6 +89,7 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
         horario: dose.dataHoraPrevista,
         status: dose.status,
         horarioRegistro: dose.dataHoraRegistro,
+        atrasada: estaAtrasada(dose, hoje),
         posicaoCiclo:
           esquema.tipo === 'CICLICO' && dose.numeroNoCiclo !== null
             ? { dia: dose.numeroNoCiclo, totalDiasAtivos: esquema.diasAtivos ?? 0 }

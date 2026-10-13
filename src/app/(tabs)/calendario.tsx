@@ -24,6 +24,7 @@ import { FAMILIA_TEXTO, FAMILIA_TITULO } from '@/constants/fontes';
 import { ROTULOS_STATUS_DOSE, TOKEN_STATUS_DOSE } from '@/constants/rotulos';
 import type { ThemeColor } from '@/constants/theme';
 import { db } from '@/db/client';
+import { marcarPerdidasPorTempo } from '@/domain/adherence-history/perdidas';
 import { type DiaCalendario, type ItemDiaCalendario, montarCalendarioMensal } from '@/domain/agenda-views/calendario-mensal';
 import { type MarcadorDia, marcadorDoDia } from '@/domain/agenda-views/marcador-dia';
 import { useTheme } from '@/hooks/use-theme';
@@ -36,6 +37,7 @@ const LEGENDA: { rotulo: string; marcador: MarcadorDia }[] = [
   { rotulo: 'Com atraso', marcador: { token: 'statusAtraso', estilo: 'cheio' } },
   { rotulo: 'Pulada', marcador: { token: 'statusNeutro', estilo: 'cheio' } },
   { rotulo: 'Perdida', marcador: { token: 'statusPerdida', estilo: 'cheio' } },
+  { rotulo: 'Atrasada', marcador: { token: 'statusAtraso', estilo: 'contorno' } },
   { rotulo: 'Prevista', marcador: { token: 'accent', estilo: 'contorno' } },
 ];
 
@@ -61,6 +63,14 @@ function Ponto({ marcador, tamanho = 6 }: { marcador: MarcadorDia | null; tamanh
 }
 
 function descreverItem(item: ItemDiaCalendario): { detalhe: string; status: string; token: ThemeColor; marcador: MarcadorDia } {
+  if (item.tipo === 'historico' && item.atrasada) {
+    return {
+      detalhe: item.horario ? format(item.horario, 'HH:mm') : 'Sem horário',
+      status: 'Atrasada',
+      token: 'statusAtraso',
+      marcador: { token: 'statusAtraso', estilo: 'contorno' },
+    };
+  }
   if (item.tipo === 'historico') {
     return {
       detalhe: item.horario ? format(item.horario, 'HH:mm') : 'Sem horário',
@@ -111,6 +121,7 @@ export default function CalendarioMensalScreen() {
 
   const recarregar = useCallback(() => {
     const agora = new Date();
+    marcarPerdidasPorTempo(db, agora);
     setHoje(agora);
     setDias(montarCalendarioMensal(db, mesReferencia, agora));
   }, [mesReferencia]);

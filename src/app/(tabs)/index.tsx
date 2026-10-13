@@ -25,6 +25,7 @@ import {
   montarAgendaDoDia,
 } from '@/domain/agenda-views/agenda-diaria';
 import { agruparPorPeriodo, type ResumoDoDia, resumirDia } from '@/domain/agenda-views/resumo-dia';
+import { marcarPerdidasPorTempo } from '@/domain/adherence-history/perdidas';
 import { confirmarDose, pularDose } from '@/domain/adherence-history/resolucao';
 import { registrarDoseSeNecessarioNoBanco } from '@/domain/adherence-history/se-necessario';
 import { confirmarNovaCartelaCiclica } from '@/domain/dose-scheduling/resolucao';
@@ -146,7 +147,9 @@ function ResumoCartao({ resumo }: { resumo: ResumoDoDia }) {
 function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque: boolean; aoMudar: () => void }) {
   const theme = useTheme();
   const resolvida = item.status !== 'pendente' && item.status !== 'aguardando';
-  const corStatus = theme[TOKEN_STATUS_DOSE[item.status]];
+  // "Atrasada" é só exibição: a dose continua pendente e com as ações.
+  const statusExibido = item.atrasada ? 'aguardando' : item.status;
+  const corStatus = theme[TOKEN_STATUS_DOSE[statusExibido]];
 
   async function tomarAgora() {
     confirmarDose(db, esquemaDominioOuFalha(item.esquemaId), item.doseId, new Date());
@@ -172,7 +175,7 @@ function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque:
         borderColor: destaque ? theme.accent : 'transparent',
       }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
-        <IconeStatus status={item.status} />
+        <IconeStatus status={statusExibido} />
         <Tocavel
           accessibilityRole="link"
           accessibilityHint="Abre o detalhe do medicamento"
@@ -190,7 +193,7 @@ function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque:
         </Tocavel>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
           <ThemedText type="smallBold" style={{ color: corStatus, textAlign: 'right' }}>
-            {ROTULO_CURTO[item.status]}
+            {item.atrasada ? 'Atrasada' : ROTULO_CURTO[item.status]}
             {item.status === 'tomada_com_atraso' && item.horarioRegistro ? `\n${format(item.horarioRegistro, 'HH:mm')}` : ''}
           </ThemedText>
           {item.alertaEstoque ? <SeloEstoqueBaixo /> : null}
@@ -281,6 +284,7 @@ export default function AgendaDoDiaScreen() {
 
   const recarregar = useCallback(() => {
     const agora = new Date();
+    marcarPerdidasPorTempo(db, agora);
     setHoje(agora);
     setItens(montarAgendaDoDia(db, agora));
   }, []);

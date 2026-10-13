@@ -259,3 +259,19 @@ describe('montarAgendaDoDia — cíclico aguardando nova cartela', () => {
     expect(montarAgendaDoDia(db, new Date(2026, 10, 9, 9))).toMatchObject([{ tipo: 'aguardando_cartela' }]);
   });
 });
+
+describe('montarAgendaDoDia — dose atrasada', () => {
+  it('às 09:00 a dose das 08:00 ainda pendente aparece atrasada; às 08:20 não', () => {
+    const db = createTestDb();
+    cadastrarMedicamento(
+      db,
+      {
+        comuns: { nome: 'X', dosagem: '1', criticidade: 'comum', quantidadeEmEstoque: 30, quantidadePorEmbalagem: 30 },
+        esquema: { tipo: 'DIARIO', horarios: ['08:00'], duracao: { modo: 'continuo' } },
+      },
+      new Date(2026, 9, 12, 7),
+    );
+    expect(montarAgendaDoDia(db, new Date(2026, 9, 12, 8, 20))).toMatchObject([{ tipo: 'dose', status: 'pendente', atrasada: false }]);
+    expect(montarAgendaDoDia(db, new Date(2026, 9, 12, 9))).toMatchObject([{ tipo: 'dose', status: 'pendente', atrasada: true }]);
+  });
+});

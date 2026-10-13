@@ -5,6 +5,7 @@ import { type EsquemaRow, listarEsquemasAtivos, paraEsquemaDominio } from '@/db/
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { StatusDose } from '@/db/schema';
+import { estaAtrasada } from '@/domain/adherence-history/classificacao';
 import { calcularStatusDoDia } from '@/domain/dose-scheduling/ciclico';
 import { gerarDosesDiario } from '@/domain/dose-scheduling/diario';
 import { gerarDosesDiasSemana } from '@/domain/dose-scheduling/dias-semana';
@@ -17,6 +18,8 @@ export interface ItemDiaHistorico {
   nome: string;
   horario: Date | null;
   status: StatusDose;
+  /** Não resolvida e mais de 30 min depois do horário (fix-late-and-calendar-status). */
+  atrasada: boolean;
 }
 
 /** `estimado` só é verdadeiro para intervalo em horas — os demais tipos futuros são definitivos (specs/agenda-views). */
@@ -135,9 +138,9 @@ function preencherFuturoDoEsquema(
 }
 
 /**
- * Monta o calendário mensal (specs/agenda-views): dias passados mostram o
- * histórico real de adesão já registrado (lido de `doses`); dias futuros —
- * hoje incluso, já que seu resultado do dia ainda está em aberto — mostram o
+ * Monta o calendário mensal (specs/agenda-views): dias passados e hoje mostram
+ * as doses reais registradas (lidas de `doses`, com "atrasada" para as não
+ * resolvidas que passaram do horário); dias a partir de amanhã mostram o
  * horário previsto, recalculado direto do esquema (não do que porventura já
  * foi materializado pela janela rolante), para que o mês inteiro possa ser
  * exibido mesmo além dessa janela.
@@ -164,7 +167,10 @@ export function montarCalendarioMensal(db: AppDb, mesReferencia: Date, hoje: Dat
     return medicamento;
   }
 
-  const fimHistorico = inicioHoje < fimMes ? inicioHoje : fimMes;
+  // Hoje entra como histórico: mostra as doses reais (tomadas, puladas,
+  // pendentes, atrasadas); a projeção do esquema começa amanhã.
+  const inicioAmanha = addDays(inicioHoje, 1);
+  const fimHistorico = inicioAmanha < fimMes ? inicioAmanha : fimMes;
   if (inicioMes < fimHistorico) {
     for (const dose of listarDosesDoIntervalo(db, inicioMes, fimHistorico)) {
       const esquemaRow = esquemasPorId.get(dose.esquemaId);
@@ -178,17 +184,31 @@ export function montarCalendarioMensal(db: AppDb, mesReferencia: Date, hoje: Dat
         nome: medicamento.nome,
         horario: dose.dataHoraPrevista,
         status: dose.status,
+        atrasada: estaAtrasada(dose, hoje),
       });
     }
   }
 
-  const inicioFuturo = inicioHoje > inicioMes ? inicioHoje : inicioMes;
-  if (inicioFuturo < fimMes) {
-    for (const esquemaRow of esquemas) {
-      const medicamento = medicamentoDoEsquema(esquemaRow);
-      if (!medicamento) continue;
-      preencherFuturoDoEsquema(db, dias, esquemaRow, medicamento, inicioFuturo, fimMes);
-    }
+  const inicioFuturo = inicioAmanha > inicioMes ? inicioAmanha : inicioMes;
+  // Intervalo em horas: as doses de hoje depois da próxima pendente só existem
+  // como estimativa, então a projeção dele continua começando hoje.
+  const inicioIntervalo = inicioHoje > inicioMes ? inicioHoje : inicioMes;
+  for (const esquemaRow of esquemas) {
+    const medicamento = medicamentoDoEsquema(esquemaRow);
+    if (!medicamento) continue;
+    const inicio = esquemaRow.tipo === 'INTERVALO_HORAS' ? inicioIntervalo : inicioFuturo;
+    if (inicio < fimMes) preencherFuturoDoEsquema(db, dias, esquemaRow, medicamento, inicio, fimMes);
+  }
+
+  // Hoje: uma estimativa no mesmo horário de uma dose real é a própria dose.
+  const diaDeHoje = dias.get(inicioHoje.getTime());
+  if (diaDeHoje) {
+    const reais = new Set(
+      diaDeHoje.itens.flatMap((item) => (item.tipo === 'historico' && item.horario ? [`${item.medicamentoId}@${item.horario.getTime()}`] : [])),
+    );
+    diaDeHoje.itens = diaDeHoje.itens.filter(
+      (item) => !(item.tipo === 'previsto' && reais.has(`${item.medicamentoId}@${item.horario.getTime()}`)),
+    );
   }
 
   return [...dias.values()].sort((a, b) => a.dia.getTime() - b.dia.getTime());

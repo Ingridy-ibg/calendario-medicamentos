@@ -25,7 +25,7 @@ function exigirDose(db: AppDb, doseId: string) {
  */
 export function confirmarDose(db: AppDb, esquema: Esquema, doseId: string, agora: Date) {
   const dose = exigirDose(db, doseId);
-  const status = classificarResposta(dose.notificacoesSemResposta);
+  const status = classificarResposta(dose, agora);
   const resolvida = resolverDoseEAgendarProxima(db, esquema, doseId, { status, dataHoraRegistro: agora });
   decrementarEstoque(db, esquema.medicamentoId, agora);
   return resolvida;

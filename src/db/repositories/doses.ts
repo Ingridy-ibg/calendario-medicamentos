@@ -279,3 +279,19 @@ export function apagarDoseNaoResolvida(db: AppDb, id: string) {
     .where(and(eq(doses.id, id), inArray(doses.status, STATUS_NAO_RESOLVIDOS)))
     .run();
 }
+
+/** Doses não resolvidas com horário previsto até `limite` (base da varredura de perdidas por tempo). */
+export function listarDosesNaoResolvidasAte(db: AppDb, limite: Date) {
+  return db
+    .select()
+    .from(doses)
+    .where(
+      and(
+        isNull(doses.deletedAt),
+        inArray(doses.status, STATUS_NAO_RESOLVIDOS),
+        isNotNull(doses.dataHoraPrevista),
+        lte(doses.dataHoraPrevista, limite),
+      ),
+    )
+    .all();
+}

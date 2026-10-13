@@ -40,6 +40,7 @@ const proxima: ItemAgendaDose = {
   horario: em(8),
   status: 'pendente',
   horarioRegistro: null,
+  atrasada: false,
   posicaoCiclo: null,
   alertaEstoque: false,
 };

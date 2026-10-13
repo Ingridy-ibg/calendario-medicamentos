@@ -16,6 +16,7 @@ import type { AcaoNotificacao } from '@/domain/dose-notifications/types';
 import { agendarAlvo, cancelarAlvo } from './agendamento';
 import { buscarContextoDaDose } from './contexto';
 import { reconciliarNotificacoes } from './reconciliador';
+import { marcarPerdidasPorTempo } from '@/domain/adherence-history/perdidas';
 import { renovarJanelasAtivas } from '@/domain/dose-scheduling/janela-rolante';
 
 export const TAREFA_NOTIFICACAO = 'TAREFA_NOTIFICACAO_DOSE';
@@ -126,6 +127,7 @@ if (!TaskManager.isTaskDefined(TAREFA_RECONCILIACAO_PERIODICA)) {
     // Antes de reconciliar: garante doses à frente mesmo se o app não for
     // aberto por semanas (fix-cyclic-and-rolling-window).
     renovarJanelasAtivas(db, agora);
+    marcarPerdidasPorTempo(db, agora);
     await reconciliarNotificacoes(db, agora);
   });
 }
