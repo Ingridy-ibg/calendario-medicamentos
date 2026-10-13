@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { generateId } from '@/lib/id';
 
-import { type Criticidade, medicamentos } from '../schema';
+import { type Criticidade, esquemas, medicamentos } from '../schema';
 import type { AppDb } from './types';
 
 export interface NovoMedicamento {
@@ -52,4 +52,22 @@ export function atualizarMedicamento(db: AppDb, id: string, patch: PatchMedicame
 
 export function removerMedicamento(db: AppDb, id: string, agora: Date) {
   db.update(medicamentos).set({ deletedAt: agora, updatedAt: agora }).where(eq(medicamentos.id, id)).run();
+}
+
+/**
+ * Medicamentos não removidos com seu esquema ativo, em ordem alfabética
+ * (aba Medicamentos — specs/medication-management).
+ */
+export function listarMedicamentosAtivosComEsquema(db: AppDb) {
+  const ativos = db.select().from(medicamentos).where(isNull(medicamentos.deletedAt)).all();
+  return ativos
+    .flatMap((medicamento) => {
+      const esquema = db
+        .select()
+        .from(esquemas)
+        .where(and(eq(esquemas.medicamentoId, medicamento.id), isNull(esquemas.deletedAt)))
+        .get();
+      return esquema ? [{ medicamento, esquema }] : [];
+    })
+    .sort((a, b) => a.medicamento.nome.localeCompare(b.medicamento.nome, 'pt-BR', { sensitivity: 'base' }));
 }

@@ -36,6 +36,11 @@ import { reconciliarNotificacoesSeDisponivel } from '@/lib/notificacoes-seguras'
 import { usePreferencias } from '@/lib/preferencias';
 import { Tocavel } from '@/components/ui/tocavel';
 
+/** Nome/área de informação de cada item leva ao detalhe (manage-medications, 6.1). */
+function abrirDetalhe(medicamentoId: string) {
+  router.push({ pathname: '/medicamento/[id]', params: { id: medicamentoId } });
+}
+
 function esquemaDominioOuFalha(esquemaId: string) {
   const linha = buscarEsquemaPorId(db, esquemaId);
   if (!linha) {
@@ -168,7 +173,11 @@ function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque:
       }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
         <IconeStatus status={item.status} />
-        <View style={{ flex: 1, gap: 2 }}>
+        <Tocavel
+          accessibilityRole="link"
+          accessibilityHint="Abre o detalhe do medicamento"
+          onPress={() => abrirDetalhe(item.medicamentoId)}
+          style={{ flex: 1, gap: 2 }}>
           <ThemedText style={{ fontFamily: FAMILIA_TEXTO[600] }}>{item.nome}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary" numerico>
             {detalhe}
@@ -178,7 +187,7 @@ function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque:
               dia {item.posicaoCiclo.dia} de {item.posicaoCiclo.totalDiasAtivos}
             </ThemedText>
           ) : null}
-        </View>
+        </Tocavel>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
           <ThemedText type="smallBold" style={{ color: corStatus, textAlign: 'right' }}>
             {ROTULO_CURTO[item.status]}
@@ -213,12 +222,16 @@ function ItemAguardandoCartela({ item, aoMudar }: { item: ItemAgendaAguardandoCa
     <Cartao style={{ borderRadius: 18, padding: 16, gap: 14 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
         <IconeStatus status="pendente" />
-        <View style={{ flex: 1, gap: 2 }}>
+        <Tocavel
+          accessibilityRole="link"
+          accessibilityHint="Abre o detalhe do medicamento"
+          onPress={() => abrirDetalhe(item.medicamentoId)}
+          style={{ flex: 1, gap: 2 }}>
           <ThemedText style={{ fontFamily: FAMILIA_TEXTO[600] }}>{item.nome}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary" numerico>
             {[item.dosagem, item.horario ? format(item.horario, 'HH:mm') : null].filter(Boolean).join(' · ')}
           </ThemedText>
-        </View>
+        </Tocavel>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
           <ThemedText type="smallBold" themeColor="statusAtraso" style={{ textAlign: 'right' }}>
             Aguardando{'\n'}nova cartela
@@ -240,7 +253,11 @@ function ItemSeNecessario({ item, aoMudar }: { item: ItemAgendaSeNecessario; aoM
 
   return (
     <Cartao style={{ borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-      <View style={{ flex: 1, gap: 2 }}>
+      <Tocavel
+        accessibilityRole="link"
+        accessibilityHint="Abre o detalhe do medicamento"
+        onPress={() => abrirDetalhe(item.medicamentoId)}
+        style={{ flex: 1, gap: 2 }}>
         <ThemedText style={{ fontFamily: FAMILIA_TEXTO[600] }}>{item.nome}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" numerico>
           {item.dosagem} · {item.registradasHoje} de {item.limiteDiario} hoje
@@ -250,7 +267,7 @@ function ItemSeNecessario({ item, aoMudar }: { item: ItemAgendaSeNecessario; aoM
             <SeloEstoqueBaixo />
           </View>
         ) : null}
-      </View>
+      </Tocavel>
       <Botao rotulo="Registrar dose" variante="suave" onPress={registrar} />
     </Cartao>
   );

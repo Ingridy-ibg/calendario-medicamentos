@@ -8,6 +8,7 @@ import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import {
   cadastrarMedicamento,
   editarEsquema,
+  editarMedicamento,
   ErroValidacao,
   removerMedicamentoComHistorico,
 } from './registration';
@@ -177,5 +178,97 @@ describe('removerMedicamentoComHistorico (4.8)', () => {
     const dosesRestantes = listarDosesPorEsquema(db, esquema.id);
     expect(dosesRestantes).toHaveLength(1);
     expect(dosesRestantes[0]).toMatchObject({ id: doseDeHoje.id, status: 'tomada' });
+  });
+});
+
+describe('editarEsquema — dose pendente de horário já passado (manage-medications, decisão 4)', () => {
+  it('às 10:00, trocar 20:00 por 21:00 mantém a dose das 08:00 ainda pendente e só refaz as futuras', () => {
+    const db = createTestDb();
+    const { esquema } = cadastrarMedicamento(
+      db,
+      { comuns, esquema: { tipo: 'DIARIO', horarios: ['08:00', '20:00'], duracao: { modo: 'continuo' } } },
+      new Date(2026, 9, 12, 7, 0),
+    );
+    const as8 = new Date(2026, 9, 12, 8, 0).getTime();
+    const doseDas8 = listarDosesPorEsquema(db, esquema.id).find((dose) => dose.dataHoraPrevista?.getTime() === as8)!;
+
+    editarEsquema(
+      db,
+      esquema.id,
+      { tipo: 'DIARIO', horarios: ['08:00', '21:00'], duracao: { modo: 'continuo' } },
+      new Date(2026, 9, 12, 10, 0),
+    );
+
+    const deHoje = listarDosesPorEsquema(db, esquema.id)
+      .filter((dose) => dose.dataHoraPrevista && dose.dataHoraPrevista.getDate() === 12 && dose.dataHoraPrevista.getMonth() === 9)
+      .map((dose) => ({ id: dose.id, hora: dose.dataHoraPrevista!.getHours(), status: dose.status }));
+    expect(deHoje.find((dose) => dose.hora === 8)).toEqual({ id: doseDas8.id, hora: 8, status: 'pendente' });
+    expect(deHoje.map((dose) => dose.hora).sort((a, b) => a - b)).toEqual([8, 21]);
+  });
+});
+
+describe('editarMedicamento', () => {
+  const diario = { tipo: 'DIARIO' as const, horarios: ['08:00'], duracao: { modo: 'continuo' as const } };
+
+  it('edita campos comuns, corrige o estoque e mantém o histórico', () => {
+    const db = createTestDb();
+    const { medicamento, esquema } = cadastrarMedicamento(db, { comuns, esquema: diario }, new Date(2026, 9, 10, 7));
+    const tomada = listarDosesPorEsquema(db, esquema.id)[0];
+    resolverDose(db, tomada.id, { status: 'tomada', dataHoraRegistro: tomada.dataHoraPrevista! });
+
+    editarMedicamento(
+      db,
+      medicamento.id,
+      { comuns: { ...comuns, nome: 'Losartana', quantidadeEmEstoque: 10 }, esquema: { ...diario, horarios: ['09:00'] } },
+      new Date(2026, 9, 12, 7),
+    );
+
+    expect(buscarMedicamentoPorId(db, medicamento.id)).toMatchObject({ nome: 'Losartana', quantidadeEmEstoque: 10 });
+    expect(buscarDosePorId(db, tomada.id)).toMatchObject({ status: 'tomada', dataHoraPrevista: tomada.dataHoraPrevista });
+  });
+
+  it('edição inválida não grava nada', () => {
+    const db = createTestDb();
+    const { medicamento } = cadastrarMedicamento(db, { comuns, esquema: diario }, new Date(2026, 9, 10, 7));
+
+    expect(() =>
+      editarMedicamento(db, medicamento.id, { comuns: { ...comuns, nome: '' }, esquema: diario }, new Date(2026, 9, 12)),
+    ).toThrow(ErroValidacao);
+    expect(buscarMedicamentoPorId(db, medicamento.id)?.nome).toBe(comuns.nome);
+  });
+
+  it('erro no esquema não deixa os campos comuns gravados pela metade', () => {
+    const db = createTestDb();
+    const { medicamento } = cadastrarMedicamento(db, { comuns, esquema: diario }, new Date(2026, 9, 10, 7));
+
+    expect(() =>
+      editarMedicamento(db, medicamento.id, { comuns: { ...comuns, nome: 'Outro' }, esquema: { ...diario, horarios: [] } }, new Date(2026, 9, 12)),
+    ).toThrow(ErroValidacao);
+    expect(buscarMedicamentoPorId(db, medicamento.id)?.nome).toBe(comuns.nome);
+  });
+
+  it('rejeita troca de tipo de esquema', () => {
+    const db = createTestDb();
+    const { medicamento } = cadastrarMedicamento(db, { comuns, esquema: diario }, new Date(2026, 9, 10, 7));
+
+    expect(() =>
+      editarMedicamento(db, medicamento.id, { comuns, esquema: { tipo: 'SE_NECESSARIO', limiteDiario: 3 } }, new Date(2026, 9, 12)),
+    ).toThrow(ErroValidacao);
+  });
+
+  it('cíclico continua especial mesmo se a edição mandar comum', () => {
+    const db = createTestDb();
+    const { medicamento } = cadastrarMedicamento(
+      db,
+      { comuns, esquema: { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '22:00' } },
+      new Date(2026, 9, 10, 7),
+    );
+    editarMedicamento(
+      db,
+      medicamento.id,
+      { comuns: { ...comuns, criticidade: 'comum' }, esquema: { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '21:00' } },
+      new Date(2026, 9, 12),
+    );
+    expect(buscarMedicamentoPorId(db, medicamento.id)?.criticidade).toBe('especial');
   });
 });

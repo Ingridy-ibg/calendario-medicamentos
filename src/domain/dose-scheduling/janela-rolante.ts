@@ -1,6 +1,12 @@
 import { addDays, addWeeks, max, startOfDay } from 'date-fns';
 
-import { inserirDose, listarDosesPorEsquema, type NovaDose, substituirDosesFuturas } from '@/db/repositories/doses';
+import {
+  inserirDose,
+  listarDosesPorEsquema,
+  type NovaDose,
+  substituirDosesAPartirDe,
+  substituirDosesFuturas,
+} from '@/db/repositories/doses';
 import { listarEsquemasAtivos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import type { AppDb } from '@/db/repositories/types';
 
@@ -57,6 +63,26 @@ export function materializarJanela(
         numeroNoCiclo: dose.numeroNoCiclo ?? null,
       }),
     ),
+  );
+}
+
+/**
+ * Variante de `materializarJanela` para a edição de um esquema: refaz só as
+ * doses de horário depois de `agora`, deixando intactas as pendentes cujo
+ * horário já passou (manage-medications, decisão 4).
+ */
+export function rematerializarJanelaAposEdicao(db: AppDb, esquema: Esquema, agora: Date) {
+  const geradas = gerarDosesParaJanela(esquema, agora, addWeeks(agora, SEMANAS_JANELA_MAXIMA));
+  if (geradas === null) return [];
+  return substituirDosesAPartirDe(
+    db,
+    esquema.id,
+    agora,
+    geradas.map((dose): NovaDose => ({
+      esquemaId: esquema.id,
+      dataHoraPrevista: dose.dataHoraPrevista,
+      numeroNoCiclo: dose.numeroNoCiclo ?? null,
+    })),
   );
 }
 

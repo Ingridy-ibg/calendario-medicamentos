@@ -29,6 +29,10 @@ export function decrementarEstoque(db: AppDb, medicamentoId: string, agora: Date
 
 /** Reposição manual (ex: comprar uma nova embalagem) — soma ao estoque atual. */
 export function reporEstoque(db: AppDb, medicamentoId: string, quantidade: number, agora: Date = new Date()) {
+  // Defesa em profundidade: a tela já valida com `validarQuantidadeCompra`.
+  if (!Number.isInteger(quantidade) || quantidade <= 0) {
+    throw new Error(`Quantidade de reposição inválida: ${quantidade}`);
+  }
   const medicamento = exigirMedicamento(db, medicamentoId);
   return atualizarMedicamento(
     db,

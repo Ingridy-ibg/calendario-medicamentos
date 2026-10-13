@@ -12,6 +12,7 @@ import {
   removerEsquema,
 } from '@/db/repositories/esquemas';
 import {
+  atualizarMedicamento,
   buscarMedicamentoPorId,
   inserirMedicamento,
   removerMedicamento,
@@ -19,7 +20,7 @@ import {
 import type { AppDb } from '@/db/repositories/types';
 import { estaDentroDaDuracao } from '@/domain/dose-scheduling/duracao';
 import { gerarPrimeiraDoseIntervalo } from '@/domain/dose-scheduling/intervalo-horas';
-import { materializarJanela } from '@/domain/dose-scheduling/janela-rolante';
+import { materializarJanela, rematerializarJanelaAposEdicao } from '@/domain/dose-scheduling/janela-rolante';
 
 import type { DadosEsquemaFormulario, DadosFormularioMedicamento, ModoDuracao } from './types';
 import { validarEsquema, validarFormulario } from './validation';
@@ -182,13 +183,45 @@ export function editarEsquema(db: AppDb, esquemaId: string, novosDados: DadosEsq
   return esquemaAtualizado;
 }
 
+/**
+ * Edita um medicamento inteiro a partir do formulário (manage-medications,
+ * decisão 3): campos comuns — inclusive a correção da quantidade em estoque —
+ * e parâmetros do esquema, numa transação. O tipo de esquema não pode mudar
+ * (specs/medication-registration); para isso é preciso remover e recadastrar.
+ */
+export function editarMedicamento(db: AppDb, medicamentoId: string, dados: DadosFormularioMedicamento, agora: Date) {
+  const erros = validarFormulario(dados);
+  if (Object.keys(erros).length > 0) {
+    throw new ErroValidacao(erros);
+  }
+
+  const esquemaAtual = listarEsquemasPorMedicamento(db, medicamentoId).find((esquema) => esquema.deletedAt === null);
+  if (!esquemaAtual) {
+    throw new Error(`Medicamento ${medicamentoId} sem esquema ativo`);
+  }
+  if (esquemaAtual.tipo !== dados.esquema.tipo) {
+    throw new ErroValidacao({ tipo: 'O tipo de esquema não pode ser trocado. Remova e cadastre de novo.' });
+  }
+
+  // Medicamentos cíclicos são sempre especiais, como no cadastro.
+  const criticidade = dados.esquema.tipo === 'CICLICO' ? 'especial' : dados.comuns.criticidade;
+
+  return db.transaction((tx) => {
+    const medicamento = atualizarMedicamento(tx, medicamentoId, { ...dados.comuns, criticidade }, agora);
+    const esquema = editarEsquema(tx, esquemaAtual.id, dados.esquema, agora);
+    return { medicamento, esquema };
+  });
+}
+
 function materializarDosesFuturasAposEdicao(db: AppDb, esquemaRow: EsquemaRow, agora: Date) {
   const dominio = paraEsquemaDominio(esquemaRow);
   switch (dominio.tipo) {
     case 'DIARIO':
     case 'DIAS_SEMANA':
     case 'CICLICO':
-      materializarJanela(db, dominio, agora);
+      // Só as doses depois de agora: uma pendente de horário já passado
+      // continua a mesma (manage-medications, decisão 4).
+      rematerializarJanelaAposEdicao(db, dominio, agora);
       return;
     case 'INTERVALO_HORAS': {
       // Não existe uma grade futura pré-computada para este tipo (só a

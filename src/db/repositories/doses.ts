@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, notInArray } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, notInArray } from 'drizzle-orm';
 
 import { LIMITE_NOTIFICACOES_COMUM } from '@/domain/dose-notifications/types';
 import { generateId } from '@/lib/id';
@@ -257,4 +257,18 @@ export function substituirDosesFuturas(db: AppDb, esquemaId: string, novasDoses:
     .run();
 
   return novasDoses.map((dose) => inserirDose(db, dose));
+}
+
+/**
+ * Como `substituirDosesFuturas`, mas só mexe nas doses de horário **depois**
+ * de `corte`: uma dose pendente cujo horário já passou fica intacta (mesmo id,
+ * mesmo estado de notificação). Usada na edição de um esquema
+ * (manage-medications, decisão 4) — a edição vale só para doses futuras.
+ */
+export function substituirDosesAPartirDe(db: AppDb, esquemaId: string, corte: Date, novasDoses: NovaDose[]) {
+  db.delete(doses)
+    .where(and(eq(doses.esquemaId, esquemaId), inArray(doses.status, STATUS_NAO_RESOLVIDOS), gt(doses.dataHoraPrevista, corte)))
+    .run();
+
+  return novasDoses.filter((dose) => dose.dataHoraPrevista && dose.dataHoraPrevista > corte).map((dose) => inserirDose(db, dose));
 }

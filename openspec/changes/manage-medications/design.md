@@ -103,6 +103,12 @@ Todas as telas já recarregam com `useFocusEffect`. Lista, detalhe e agenda segu
 
 Se `apply-visual-identity` já estiver implementada, as telas novas usam `Cartao`, `Botao`, `Chip`, `CampoTexto`, `Icone` e os tokens dela. Se não, usam `ThemedView`/`ThemedText` atuais e entram na lista de telas a restilizar daquela change. A ordem recomendada é implementar `apply-visual-identity` primeiro.
 
+### Notas da conferência na v57 (tarefa 1.1)
+
+- Rotas: o detalhe fica em `src/app/medicamento/[id]/index.tsx` e a edição em `src/app/medicamento/[id]/editar.tsx` (pasta dinâmica), em vez de `[id].tsx` + pasta `[id]/` lado a lado, cuja coexistência a doc não descreve. `medicamento/novo` é estático e tem precedência sobre `[id]`.
+- Folha de compra: `presentation: 'formSheet'` com `sheetAllowedDetents` existe no `react-native-screens` instalado; a folha é uma rota `src/app/medicamento/[id]/compra.tsx`.
+- `NativeTabs` aceita a terceira aba sem configuração extra.
+
 ## Risks / Trade-offs
 
 - [Deltas de `medication-registration`, `medication-stock` e `dose-notifications` dependem da change não arquivada `add-medication-scheduling`] → arquivá-la primeiro.

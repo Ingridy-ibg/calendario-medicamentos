@@ -30,6 +30,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Calendário</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="calendar_month" sf="calendar" />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="medicamentos">
+        <NativeTabs.Trigger.Label>Medicamentos</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon md="pill" sf="pills" />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
