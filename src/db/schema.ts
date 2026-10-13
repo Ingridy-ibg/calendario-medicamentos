@@ -61,6 +61,10 @@ export const esquemas = sqliteTable('esquemas', {
   diasAtivos: integer('dias_ativos'),
   diasPausa: integer('dias_pausa'),
   dataInicioCiclo: integer('data_inicio_ciclo', { mode: 'timestamp_ms' }),
+  // CICLICO sem ciclo (dataInicioCiclo nulo): dia (início do dia) previsto
+  // para o início da nova cartela, definido no cadastro ou na volta à agenda
+  // (inicio-de-cartela). Com ciclo, o início previsto é derivado da âncora.
+  inicioCartelaPrevisto: integer('inicio_cartela_previsto', { mode: 'timestamp_ms' }),
   // DIARIO, INTERVALO_HORAS, DIAS_SEMANA: null = uso contínuo.
   duracaoDias: integer('duracao_dias'),
   // Dia 1 do tratamento, para contar `duracaoDias` quando o medicamento já

@@ -24,6 +24,7 @@ import {
   type ItemAgendaDose,
   type ItemAgendaSeNecessario,
   montarAgendaDoDia,
+  textoInicioPrevisto,
 } from '@/domain/agenda-views/agenda-diaria';
 import { agruparPorPeriodo, type ResumoDoDia, resumirDia } from '@/domain/agenda-views/resumo-dia';
 import { marcarPerdidasPorTempo } from '@/domain/adherence-history/perdidas';
@@ -180,6 +181,9 @@ function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque:
  * registra o primeiro comprimido como tomado agora (fix-cyclic-and-rolling-window).
  */
 function ItemAguardandoCartela({ item, aoMudar }: { item: ItemAgendaAguardandoCartela; aoMudar: () => void }) {
+  const theme = useTheme();
+  const inicio = textoInicioPrevisto(item, new Date());
+
   async function comecarCartela() {
     confirmarNovaCartelaCiclica(db, esquemaDominioOuFalha(item.esquemaId) as EsquemaCiclico, new Date());
     await reconciliarNotificacoesSeDisponivel(db);
@@ -197,8 +201,16 @@ function ItemAguardandoCartela({ item, aoMudar }: { item: ItemAgendaAguardandoCa
           style={{ flex: 1, gap: 2 }}>
           <ThemedText style={{ fontFamily: FAMILIA_TEXTO[600] }}>{item.nome}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary" numerico>
-            {[item.dosagem, item.horario ? format(item.horario, 'HH:mm') : null].filter(Boolean).join(' · ')}
+            {item.dosagem}
           </ThemedText>
+          {inicio ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {item.atrasada ? <Icone nome="alerta" cor={theme.statusAtraso} tamanho={14} /> : null}
+              <ThemedText type="small" numerico style={{ color: item.atrasada ? theme.statusAtraso : theme.textSecondary }}>
+                Nova cartela {inicio}
+              </ThemedText>
+            </View>
+          ) : null}
         </Tocavel>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
           <ThemedText type="smallBold" themeColor="statusAtraso" style={{ textAlign: 'right' }}>
@@ -339,7 +351,7 @@ export default function AgendaDoDiaScreen() {
                         <ItemDose
                           key={item.doseId}
                           item={item}
-                          destaque={item.doseId === resumo.proxima?.doseId}
+                          destaque={resumo.proxima?.tipo === 'dose' && item.doseId === resumo.proxima.doseId}
                           aoMudar={recarregar}
                         />
                       ),

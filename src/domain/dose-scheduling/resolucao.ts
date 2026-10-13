@@ -1,9 +1,12 @@
-import { inserirDose, resolverDose } from '@/db/repositories/doses';
+import { addDays, startOfDay } from 'date-fns';
+
+import { apagarDoseNaoResolvida, inserirDose, listarDosesPorEsquema, resolverDose } from '@/db/repositories/doses';
 import { definirInicioCiclo } from '@/db/repositories/esquemas';
 import type { AppDb } from '@/db/repositories/types';
+import { classificarResposta } from '@/domain/adherence-history/classificacao';
 import { decrementarEstoque } from '@/domain/medication-stock/estoque';
 
-import { confirmarPrimeiraDoseCiclo } from './ciclico';
+import { confirmarPrimeiraDoseCiclo, ehInicioDeCartelaPendente } from './ciclico';
 import { gerarProximaDoseIntervalo } from './intervalo-horas';
 import { materializarJanela } from './janela-rolante';
 import type { Esquema, EsquemaCiclico } from './types';
@@ -49,20 +52,35 @@ export function resolverDoseEAgendarProxima(db: AppDb, esquema: Esquema, doseId:
 
 /**
  * Fluxo específico de CICLICO para confirmar a primeira dose de uma nova
- * cartela: define a nova âncora de dia 1, materializa a janela futura a
- * partir dela (que passa a incluir a dose de hoje) e resolve essa dose como
- * tomada — decrementando o estoque em uma unidade (specs/medication-stock),
+ * cartela: define a nova âncora de dia 1 e resolve o primeiro comprimido como
+ * tomado — decrementando o estoque em uma unidade (specs/medication-stock),
  * como qualquer outra dose confirmada.
+ *
+ * Com a dose de início de cartela pendente (inicio-de-cartela):
+ * - confirmada no dia previsto ou depois, ela mesma é resolvida (tomada ou
+ *   tomada com atraso, no dia em que estava prevista) e a janela é
+ *   materializada a partir de amanhã, sem um segundo dia 1;
+ * - confirmada antes do dia previsto, ela é descartada e o dia 1 é hoje.
  */
 export function confirmarNovaCartelaCiclica(db: AppDb, esquema: EsquemaCiclico, agora: Date) {
-  const novoEsquema = confirmarPrimeiraDoseCiclo(esquema, agora);
+  const novoEsquema: EsquemaCiclico = { ...confirmarPrimeiraDoseCiclo(esquema, agora), inicioCartelaPrevisto: null };
   db.transaction((tx) => {
+    const inicioPendente = listarDosesPorEsquema(tx, esquema.id).find((dose) => ehInicioDeCartelaPendente(esquema, dose));
+
     // A âncora precisa ir para o banco: é dela que a agenda, o calendário, os
     // lembretes e a renovação da janela recalculam o ciclo depois.
     definirInicioCiclo(tx, esquema.id, agora, agora);
-    const dosesInseridas = materializarJanela(tx, novoEsquema, agora);
 
-    const primeiraDose = dosesInseridas.find((dose) => dose.numeroNoCiclo === 1);
+    if (inicioPendente && startOfDay(inicioPendente.dataHoraPrevista!) <= startOfDay(agora)) {
+      resolverDose(tx, inicioPendente.id, { status: classificarResposta(inicioPendente, agora), dataHoraRegistro: agora });
+      materializarJanela(tx, novoEsquema, startOfDay(addDays(agora, 1)));
+      decrementarEstoque(tx, novoEsquema.medicamentoId, agora);
+      return;
+    }
+
+    if (inicioPendente) apagarDoseNaoResolvida(tx, inicioPendente.id);
+    const dosesInseridas = materializarJanela(tx, novoEsquema, agora);
+    const primeiraDose = dosesInseridas.find((dose) => dose.numeroNoCiclo === 1 && dose.dataHoraPrevista! < addDays(startOfDay(agora), 1));
     if (primeiraDose) {
       resolverDose(tx, primeiraDose.id, { status: 'tomada', dataHoraRegistro: agora });
       decrementarEstoque(tx, novoEsquema.medicamentoId, agora);

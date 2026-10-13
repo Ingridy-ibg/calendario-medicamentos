@@ -14,6 +14,8 @@ import {
   type TipoAgendador,
 } from '@/domain/dose-notifications/reconciliador';
 import { CANAIS_NOTIFICACAO } from '@/domain/dose-notifications/types';
+import { textosDaDose } from '@/domain/dose-notifications/textos';
+import { ehInicioDeCartelaPendente } from '@/domain/dose-scheduling/ciclico';
 import { agendarAlarme, cancelarAlarme, linkDoAlarme, listarAlarmesAgendados } from '@/lib/alarme-dose';
 
 import { buscarContextoDaDose, buscarMedicamentoDoEsquema } from './contexto';
@@ -66,6 +68,7 @@ const agendadorNotificacoes: Agendador = {
           dosagem: contexto.medicamento.dosagem,
           criticidade: contexto.medicamento.criticidade,
           notificacoesSemResposta: dose.notificacoesSemResposta,
+          inicioDeCartela: contexto.esquema.tipo === 'CICLICO' && ehInicioDeCartelaPendente(contexto.esquema, dose),
         }),
         trigger: {
           type: SchedulableTriggerInputTypes.DATE,
@@ -105,17 +108,22 @@ const agendadorAlarme: Agendador = {
     const analisado = analisarIdentificador(alvo.identifier);
     if (!analisado || analisado.tipo !== 'dose') return;
 
+    const dose = buscarDosePorId(db, analisado.doseId);
     const contexto = buscarContextoDaDose(db, analisado.doseId);
-    if (!contexto) {
+    if (!dose || !contexto) {
       cancelarAlarme(alvo.identifier);
       return;
     }
-    // Agendar o mesmo id substitui o anterior (mesmo PendingIntent).
-    agendarAlarme(alvo.identifier, alvo.dataHora, {
-      titulo: `Hora de tomar ${contexto.medicamento.nome}`,
-      texto: contexto.medicamento.dosagem,
-      link: linkDoAlarme(analisado.doseId),
+    // O mesmo texto da notificação, inclusive o de início de cartela (inicio-de-cartela).
+    const { titulo, corpo } = textosDaDose({
+      nomeMedicamento: contexto.medicamento.nome,
+      dosagem: contexto.medicamento.dosagem,
+      criticidade: contexto.medicamento.criticidade,
+      notificacoesSemResposta: dose.notificacoesSemResposta,
+      inicioDeCartela: contexto.esquema.tipo === 'CICLICO' && ehInicioDeCartelaPendente(contexto.esquema, dose),
     });
+    // Agendar o mesmo id substitui o anterior (mesmo PendingIntent).
+    agendarAlarme(alvo.identifier, alvo.dataHora, { titulo, texto: corpo, link: linkDoAlarme(analisado.doseId) });
   },
 
   async cancelar(identifier) {

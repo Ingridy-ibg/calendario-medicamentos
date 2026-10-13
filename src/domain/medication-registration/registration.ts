@@ -11,6 +11,8 @@ import {
 import {
   atualizarEsquema,
   buscarEsquemaPorId,
+  definirInicioCartelaPrevisto,
+  definirInicioCiclo,
   type EsquemaRow,
   inserirEsquema,
   listarEsquemasPorMedicamento,
@@ -30,7 +32,7 @@ import { estaDentroDaDuracao } from '@/domain/dose-scheduling/duracao';
 import { materializarJanela, rematerializarJanelaAposEdicao } from '@/domain/dose-scheduling/janela-rolante';
 
 import { paraDadosFormulario, paraValoresFormulario } from './formulario';
-import type { DadosEsquemaFormulario, DadosFormularioMedicamento, ModoDuracao } from './types';
+import type { DadosEsquemaFormulario, DadosFormularioMedicamento, EscolhaInicioCartela, ModoDuracao } from './types';
 import { type HistoricoDaVolta, montarPreviaCadastro, type PlanoCadastro, type PreviaCadastro } from './previa';
 import { normalizarObservacoes, validarEmUso, validarEsquema, validarFormulario } from './validation';
 
@@ -47,14 +49,18 @@ function duracaoParaDias(duracao: ModoDuracao): number | null {
 
 /**
  * Um medicamento cíclico recém-cadastrado começa `dataInicioCiclo: null`
- * (em espera) — nunca "agora mesmo" — porque um novo ciclo só existe quando
- * a primeira dose é confirmada explicitamente (ver specs/dose-scheduling e
- * o Open Question correspondente em design.md).
+ * (em espera), com o início previsto da nova cartela vindo do plano — hoje,
+ * amanhã ou, com "Já tomei hoje", já ancorado (inicio-de-cartela). Um novo
+ * ciclo só existe quando a primeira dose é confirmada (specs/dose-scheduling).
  */
 function paraNovoEsquema(
   medicamentoId: string,
   esquema: DadosEsquemaFormulario,
-  plano: Pick<PlanoCadastro, 'dataInicio' | 'dataInicioCiclo'> = { dataInicio: null, dataInicioCiclo: null },
+  plano: Pick<PlanoCadastro, 'dataInicio' | 'dataInicioCiclo' | 'inicioCartelaPrevisto'> = {
+    dataInicio: null,
+    dataInicioCiclo: null,
+    inicioCartelaPrevisto: null,
+  },
 ): NovoEsquema {
   switch (esquema.tipo) {
     case 'DIARIO':
@@ -89,6 +95,7 @@ function paraNovoEsquema(
         diasAtivos: esquema.diasAtivos,
         diasPausa: esquema.diasPausa,
         dataInicioCiclo: plano.dataInicioCiclo,
+        inicioCartelaPrevisto: plano.dataInicioCiclo ? null : plano.inicioCartelaPrevisto,
         horarios: [esquema.horario],
       };
     case 'SE_NECESSARIO':
@@ -162,6 +169,16 @@ export function prepararCadastro(dados: DadosFormularioMedicamento, agora: Date)
   return montarPreviaCadastro(dados, agora);
 }
 
+/**
+ * Cíclico cujo horário de hoje já passou: sem a resposta a "Você já tomou o
+ * 1º comprimido hoje?", nada é salvo (specs/medication-registration).
+ */
+function exigirEscolhaDoInicioDaCartela(previa: PreviaCadastro) {
+  if (previa.novaCartela?.pergunta && !previa.novaCartela.escolha) {
+    throw new ErroValidacao({ inicioCartela: 'Diga se você já tomou o 1º comprimido hoje.' });
+  }
+}
+
 export interface OpcoesCadastro {
   /** `false` = só cadastrar, fora da agenda: sem doses e ignorando "Já estava tomando" (agenda-membership). */
   naAgenda?: boolean;
@@ -173,6 +190,7 @@ export function cadastrarMedicamento(db: AppDb, dadosInformados: DadosFormulario
 
   // A mesma prévia que a tela de confirmação mostra decide o que é gravado.
   const previa = montarPreviaCadastro(dados, agora);
+  if (naAgenda) exigirEscolhaDoInicioDaCartela(previa);
 
   // Medicamentos cíclicos são sempre especiais, independentemente do valor
   // selecionado pelo usuário no controle de criticidade.
@@ -380,11 +398,16 @@ function historicoDaVolta(db: AppDb, esquemaId: string, agora: Date): HistoricoD
  * no intervalo em horas, contando a partir da última dose tomada. É o que a
  * confirmação mostra e o que `adicionarAAgenda` grava.
  */
-export function prepararVoltaAAgenda(db: AppDb, medicamentoId: string, agora: Date): { dados: DadosFormularioMedicamento; previa: PreviaCadastro } {
+export function prepararVoltaAAgenda(
+  db: AppDb,
+  medicamentoId: string,
+  agora: Date,
+  inicioCartela?: EscolhaInicioCartela,
+): { dados: DadosFormularioMedicamento; previa: PreviaCadastro } {
   const medicamento = buscarMedicamentoPorId(db, medicamentoId);
   if (!medicamento) throw new Error(`Medicamento ${medicamentoId} não encontrado`);
   const esquema = esquemaAtivoDe(db, medicamentoId);
-  const dados = paraDadosFormulario(paraValoresFormulario(medicamento, esquema));
+  const dados = { ...paraDadosFormulario(paraValoresFormulario(medicamento, esquema)), inicioCartela };
   return { dados, previa: montarPreviaCadastro(dados, agora, historicoDaVolta(db, esquema.id, agora)) };
 }
 
@@ -397,11 +420,18 @@ export function prepararVoltaAAgenda(db: AppDb, medicamentoId: string, agora: Da
  */
 export function adicionarAAgenda(db: AppDb, medicamentoId: string, previa: PreviaCadastro) {
   const { agora } = previa;
+  exigirEscolhaDoInicioDaCartela(previa);
   return db.transaction((tx) => {
     const esquema = esquemaAtivoDe(tx, medicamentoId);
     atualizarMedicamento(tx, medicamentoId, { naAgenda: true }, agora);
     substituirDosesFuturas(tx, esquema.id, []);
-    const reiniciado = reiniciarEsquema(tx, esquema.id, agora, agora)!;
+    let reiniciado = reiniciarEsquema(tx, esquema.id, agora, agora)!;
+    // Cíclico: o início da nova cartela vem da confirmação da volta (inicio-de-cartela).
+    if (reiniciado.tipo === 'CICLICO') {
+      reiniciado = previa.plano.dataInicioCiclo
+        ? definirInicioCiclo(tx, esquema.id, previa.plano.dataInicioCiclo, agora)!
+        : definirInicioCartelaPrevisto(tx, esquema.id, previa.plano.inicioCartelaPrevisto, agora)!;
+    }
     materializarDosesIniciais(tx, reiniciado, previa.plano, agora);
     return previa;
   });

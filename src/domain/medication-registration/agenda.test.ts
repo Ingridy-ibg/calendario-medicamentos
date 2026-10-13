@@ -354,3 +354,29 @@ describe('alertas de estoque fora da agenda', () => {
     expect(alertaEstoqueDoMedicamento(db, dominio, buscarMedicamentoPorId(db, medicamento.id)!, as(12, 7))).toBeNull();
   });
 });
+
+describe('volta à agenda de um cíclico (inicio-de-cartela, 6.2)', () => {
+  const ciclico: DadosFormularioMedicamento = {
+    comuns: { ...comuns, nome: 'Anticoncepcional', criticidade: 'especial', quantidadeEmEstoque: 28, quantidadePorEmbalagem: 28 },
+    esquema: { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '22:00' },
+  };
+
+  it('voltando às 15:00: aguarda a nova cartela com a dose de início hoje às 22:00', () => {
+    const db = createTestDb();
+    const { medicamento, esquema } = cadastrarMedicamento(db, ciclico, as(10, 9), { naAgenda: false });
+    voltar(db, medicamento.id, as(12, 15));
+
+    expect(buscarEsquemaPorId(db, esquema.id)).toMatchObject({ dataInicioCiclo: null, inicioCartelaPrevisto: as(12, 0) });
+    expect(listarDosesPorEsquema(db, esquema.id)).toMatchObject([{ dataHoraPrevista: as(12, 22), numeroNoCiclo: 1, status: 'pendente' }]);
+    expect(montarAgendaDoDia(db, as(12, 15))).toMatchObject([{ tipo: 'aguardando_cartela', inicioPrevisto: as(12, 22) }]);
+  });
+
+  it('voltando às 23:00 sem escolha não salva; com "Começo amanhã" a dose de início é amanhã', () => {
+    const db = createTestDb();
+    const { medicamento, esquema } = cadastrarMedicamento(db, ciclico, as(10, 9), { naAgenda: false });
+    expect(() => voltar(db, medicamento.id, as(12, 23))).toThrow(ErroValidacao);
+
+    adicionarAAgenda(db, medicamento.id, prepararVoltaAAgenda(db, medicamento.id, as(12, 23), 'amanha').previa);
+    expect(listarDosesPorEsquema(db, esquema.id)).toMatchObject([{ dataHoraPrevista: as(13, 22), numeroNoCiclo: 1 }]);
+  });
+});

@@ -6,11 +6,10 @@ import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { StatusDose } from '@/db/schema';
 import { estaAtrasada } from '@/domain/adherence-history/classificacao';
-import { calcularStatusDoDia } from '@/domain/dose-scheduling/ciclico';
+import { ehInicioDeCartela, projetarCiclos } from '@/domain/dose-scheduling/ciclico';
 import { gerarDosesDiario } from '@/domain/dose-scheduling/diario';
 import { gerarDosesDiasSemana } from '@/domain/dose-scheduling/dias-semana';
 import { estaDentroDaDuracao } from '@/domain/dose-scheduling/duracao';
-import { combinarDataEHorario } from '@/domain/dose-scheduling/horario';
 
 export interface ItemDiaHistorico {
   tipo: 'historico';
@@ -20,6 +19,8 @@ export interface ItemDiaHistorico {
   status: StatusDose;
   /** Não resolvida e mais de 30 min depois do horário (fix-late-and-calendar-status). */
   atrasada: boolean;
+  /** Dia 1 de uma cartela de cíclico: o painel mostra "Início da nova cartela" (inicio-de-cartela). */
+  inicioDeCartela?: true;
 }
 
 /** `estimado` só é verdadeiro para intervalo em horas — os demais tipos futuros são definitivos (specs/agenda-views). */
@@ -37,7 +38,15 @@ export interface ItemDiaPausaCiclo {
   nome: string;
 }
 
-export type ItemDiaCalendario = ItemDiaHistorico | ItemDiaPrevisto | ItemDiaPausaCiclo;
+/** Início previsto de uma nova cartela num dia futuro (inicio-de-cartela). */
+export interface ItemDiaInicioCartela {
+  tipo: 'inicio-cartela';
+  medicamentoId: string;
+  nome: string;
+  horario: Date;
+}
+
+export type ItemDiaCalendario = ItemDiaHistorico | ItemDiaPrevisto | ItemDiaPausaCiclo | ItemDiaInicioCartela;
 
 export interface DiaCalendario {
   dia: Date;
@@ -57,6 +66,7 @@ function preencherFuturoDoEsquema(
   medicamento: Medicamento,
   de: Date,
   ate: Date,
+  hoje: Date,
 ) {
   const esquema = paraEsquemaDominio(esquemaRow);
 
@@ -90,23 +100,16 @@ function preencherFuturoDoEsquema(
       return;
 
     case 'CICLICO': {
-      let dia = startOfDay(de);
-      const fim = startOfDay(ate);
-      const [horario] = esquema.horarios;
-      while (dia < fim) {
-        const status = calcularStatusDoDia(esquema, dia);
-        if (status.fase === 'ativo') {
-          adicionarItem(dias, dia, {
-            tipo: 'previsto',
-            medicamentoId: medicamento.id,
-            nome: medicamento.nome,
-            horario: combinarDataEHorario(dia, horario),
-            estimado: false,
-          });
-        } else if (status.fase === 'pausa') {
-          adicionarItem(dias, dia, { tipo: 'pausa-ciclo', medicamentoId: medicamento.id, nome: medicamento.nome });
+      // O ciclo atual e, a partir do início previsto da nova cartela, os ciclos seguintes (inicio-de-cartela).
+      const base = { medicamentoId: medicamento.id, nome: medicamento.nome };
+      for (const projetado of projetarCiclos(esquema, de, ate, hoje)) {
+        if (projetado.fase === 'ativo') {
+          adicionarItem(dias, projetado.dia, { tipo: 'previsto', ...base, horario: projetado.horario, estimado: false });
+        } else if (projetado.fase === 'inicio-cartela') {
+          adicionarItem(dias, projetado.dia, { tipo: 'inicio-cartela', ...base, horario: projetado.horario });
+        } else {
+          adicionarItem(dias, projetado.dia, { tipo: 'pausa-ciclo', ...base });
         }
-        dia = addDays(dia, 1);
       }
       return;
     }
@@ -186,6 +189,7 @@ export function montarCalendarioMensal(db: AppDb, mesReferencia: Date, hoje: Dat
         horario: dose.dataHoraPrevista,
         status: dose.status,
         atrasada: estaAtrasada(dose, hoje),
+        ...(esquemaRow.tipo === 'CICLICO' && ehInicioDeCartela(dose) ? { inicioDeCartela: true as const } : {}),
       });
     }
   }
@@ -198,7 +202,7 @@ export function montarCalendarioMensal(db: AppDb, mesReferencia: Date, hoje: Dat
     const medicamento = medicamentoDoEsquema(esquemaRow);
     if (!medicamento) continue;
     const inicio = esquemaRow.tipo === 'INTERVALO_HORAS' ? inicioIntervalo : inicioFuturo;
-    if (inicio < fimMes) preencherFuturoDoEsquema(db, dias, esquemaRow, medicamento, inicio, fimMes);
+    if (inicio < fimMes) preencherFuturoDoEsquema(db, dias, esquemaRow, medicamento, inicio, fimMes, hoje);
   }
 
   // Hoje: uma estimativa no mesmo horário de uma dose real é a própria dose.

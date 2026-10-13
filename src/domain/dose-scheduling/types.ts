@@ -43,6 +43,12 @@ export interface EsquemaCiclico extends EsquemaBase {
   /** Horário diário único do ciclo (array de 1 elemento, por consistência com o schema). */
   horarios: string[];
   dataInicioCiclo: Date | null;
+  /**
+   * Sem ciclo (`dataInicioCiclo` nulo): o dia previsto para o início da nova
+   * cartela, definido no cadastro ou na volta à agenda. Ignorado quando há
+   * ciclo — aí o início previsto é derivado da âncora (`inicioPrevistoDaCartela`).
+   */
+  inicioCartelaPrevisto?: Date | null;
 }
 
 export interface EsquemaSeNecessario extends EsquemaBase {

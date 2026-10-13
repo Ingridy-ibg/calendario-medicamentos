@@ -4,6 +4,8 @@ import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { Criticidade } from '@/db/schema';
 import { confirmarDose, pularDose } from '@/domain/adherence-history/resolucao';
+import { ehInicioDeCartelaPendente } from '@/domain/dose-scheduling/ciclico';
+import { confirmarNovaCartelaCiclica } from '@/domain/dose-scheduling/resolucao';
 import type { Esquema } from '@/domain/dose-scheduling/types';
 
 import { adiarNotificacao, decidirAposEntrega } from './cascata';
@@ -45,7 +47,12 @@ export function aplicarRespostaDeNotificacao(
 
   switch (acao) {
     case 'tomei_agora':
-      confirmarDose(db, esquema, doseId, agora);
+      // Dia 1 de uma nova cartela: confirmar inicia o ciclo (inicio-de-cartela).
+      if (esquema.tipo === 'CICLICO' && ehInicioDeCartelaPendente(esquema, dose)) {
+        confirmarNovaCartelaCiclica(db, esquema, agora);
+      } else {
+        confirmarDose(db, esquema, doseId, agora);
+      }
       return { tipo: 'resolvida' };
     case 'nao_tomar':
       pularDose(db, esquema, doseId, agora);

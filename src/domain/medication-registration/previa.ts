@@ -6,14 +6,16 @@ import type { Esquema } from '@/domain/dose-scheduling/types';
 import { type PrevisaoEstoque, preverFimDoEstoque } from '@/domain/medication-management/gestao';
 import { dosesDaGrade, dosesFuturas } from '@/domain/medication-stock/doses-restantes';
 
-import type { DadosFormularioMedicamento } from './types';
+import type { DadosFormularioMedicamento, EscolhaInicioCartela } from './types';
 
 /** O que vai para o banco — exatamente o que a confirmação mostra (design.md, decisão 2). */
 export interface PlanoCadastro {
   /** Dia 1 do tratamento quando já estava em uso; `null` = o próprio cadastro. */
   dataInicio: Date | null;
-  /** Âncora do ciclo atual do cíclico em uso; `null` = aguardando nova cartela. */
+  /** Âncora do ciclo atual do cíclico em uso (ou que começou hoje); `null` = aguardando nova cartela. */
   dataInicioCiclo: Date | null;
+  /** Cíclico aguardando: dia previsto da nova cartela (inicio-de-cartela). */
+  inicioCartelaPrevisto: Date | null;
   /** Primeira dose do intervalo em horas. */
   primeiraDoseIntervalo: Date | null;
   /** Doses de hoje (horário previsto) informadas como já tomadas. */
@@ -58,6 +60,13 @@ export interface PreviaCadastro {
     insuficiente: { dosesRestantes: number; faltam: number; acabaEm: Date } | null;
   };
   hoje: { tomadas: Date[]; aAgendar: Date[] };
+  /**
+   * Cíclico novo ou de volta à agenda (inicio-de-cartela): quando começa a
+   * cartela. `pergunta` = o horário de hoje já passou e é preciso saber se o
+   * 1º comprimido já foi tomado; `inicio` = a dose de início agendada, ou
+   * `null` quando a cartela começou hoje ou falta a resposta.
+   */
+  novaCartela: { pergunta: boolean; escolha: EscolhaInicioCartela | null; inicio: Date | null; comecouHoje: Date | null } | null;
   /** Dias antes do cadastro que ficam sem registro no histórico. */
   diasSemRegistro: { de: Date; ate: Date } | null;
   plano: PlanoCadastro;
@@ -90,6 +99,7 @@ function esquemaDaPrevia(dados: DadosFormularioMedicamento, plano: PlanoCadastro
         diasPausa: esquema.diasPausa,
         horarios: [esquema.horario],
         dataInicioCiclo: plano.dataInicioCiclo,
+        inicioCartelaPrevisto: plano.inicioCartelaPrevisto,
       };
     case 'SE_NECESSARIO':
       return { ...base, tipo: 'SE_NECESSARIO', limiteDiario: esquema.limiteDiario };
@@ -124,6 +134,7 @@ function resolverPlano(dados: DadosFormularioMedicamento, agora: Date, historico
   const plano: PlanoCadastro = {
     dataInicio: null,
     dataInicioCiclo: null,
+    inicioCartelaPrevisto: null,
     primeiraDoseIntervalo: null,
     dosesTomadasHoje: [],
     horariosJaResolvidos: historico?.resolvidas.map((dose) => dose.previsto) ?? [],
@@ -134,6 +145,14 @@ function resolverPlano(dados: DadosFormularioMedicamento, agora: Date, historico
   if (emUso?.tipo === 'ciclo' && dados.esquema.tipo === 'CICLICO') {
     const recuo = emUso.fase === 'ativo' ? emUso.dia - 1 : dados.esquema.diasAtivos + emUso.dia - 1;
     plano.dataInicioCiclo = subDays(hoje, recuo);
+  }
+  // Cíclico sem "em uso": a cartela começa hoje no horário, ou — se ele já
+  // passou — conforme a resposta do usuário (inicio-de-cartela).
+  if (dados.esquema.tipo === 'CICLICO' && emUso?.tipo !== 'ciclo') {
+    const horarioDeHoje = combinarDataEHorario(hoje, dados.esquema.horario);
+    if (horarioDeHoje > agora) plano.inicioCartelaPrevisto = hoje;
+    else if (dados.inicioCartela === 'amanha') plano.inicioCartelaPrevisto = addDays(hoje, 1);
+    else if (dados.inicioCartela === 'ja_tomei') plano.dataInicioCiclo = horarioDeHoje;
   }
 
   if (dados.esquema.tipo === 'INTERVALO_HORAS') {
@@ -174,6 +193,23 @@ export function montarPreviaCadastro(dados: DadosFormularioMedicamento, agora: D
       (dose) => dose <= agora && tomadas.has(`${String(dose.getHours()).padStart(2, '0')}:${String(dose.getMinutes()).padStart(2, '0')}`),
     );
   }
+
+  // "Já tomei hoje": o dia 1 entra no histórico como tomado no horário do ciclo.
+  const novaCartela =
+    esquema.tipo === 'CICLICO' && dados.emUso?.dados?.tipo !== 'ciclo'
+      ? (() => {
+          const horarioDeHoje = combinarDataEHorario(hoje, esquema.horarios[0]);
+          const pergunta = horarioDeHoje <= agora;
+          const escolha = pergunta ? (dados.inicioCartela ?? null) : null;
+          if (escolha === 'ja_tomei') plano.dosesTomadasHoje = [horarioDeHoje];
+          return {
+            pergunta,
+            escolha,
+            inicio: plano.inicioCartelaPrevisto ? combinarDataEHorario(plano.inicioCartelaPrevisto, esquema.horarios[0]) : null,
+            comecouHoje: escolha === 'ja_tomei' ? horarioDeHoje : null,
+          };
+        })()
+      : null;
 
   // Volta à agenda com a grade editada: as resolvidas de hoje cobrem os horários da grade atual.
   if (historico && esquema.tipo !== 'INTERVALO_HORAS' && esquema.tipo !== 'SE_NECESSARIO') {
@@ -254,6 +290,7 @@ export function montarPreviaCadastro(dados: DadosFormularioMedicamento, agora: D
         : plano.dosesTomadasHoje,
       aAgendar: futuras.filter((dose) => isSameDay(dose, agora)),
     },
+    novaCartela,
     diasSemRegistro,
     plano,
   };

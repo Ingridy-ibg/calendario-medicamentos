@@ -72,3 +72,100 @@ export function gerarDosesCiclico(esquema: EsquemaCiclico, de: Date, ate: Date):
 
   return doses;
 }
+
+/**
+ * Dia e horário previstos para o início da próxima cartela
+ * (inicio-de-cartela): com ciclo, o dia seguinte ao fim da pausa (ou dos dias
+ * ativos, sem pausa); sem ciclo, o dia gravado no cadastro ou na volta à
+ * agenda. Sempre no horário atual do ciclo — editar o horário move o início.
+ */
+export function inicioPrevistoDaCartela(esquema: EsquemaCiclico): Date | null {
+  const [horario] = esquema.horarios;
+  if (!horario) return null;
+  if (esquema.dataInicioCiclo !== null) {
+    const dia = addDays(startOfDay(esquema.dataInicioCiclo), esquema.diasAtivos + esquema.diasPausa);
+    return combinarDataEHorario(dia, horario);
+  }
+  return esquema.inicioCartelaPrevisto ? combinarDataEHorario(startOfDay(esquema.inicioCartelaPrevisto), horario) : null;
+}
+
+/**
+ * A dose de início de cartela (dia 1 da nova cartela) quando ela cai em
+ * [de, ate] — só ela: os dias 2 em diante de um ciclo não iniciado nunca são
+ * gerados, porque o ciclo só começa com a confirmação.
+ */
+export function gerarDoseDeInicioDeCartela(esquema: EsquemaCiclico, de: Date, ate: Date): DoseGerada[] {
+  const inicio = inicioPrevistoDaCartela(esquema);
+  if (!inicio || inicio < startOfDay(de) || startOfDay(inicio) > startOfDay(ate)) return [];
+  return [{ dataHoraPrevista: inicio, numeroNoCiclo: 1 }];
+}
+
+interface DoseDoCiclo {
+  numeroNoCiclo: number | null;
+  status: string;
+  dataHoraPrevista: Date | null;
+}
+
+/** Dia 1 de uma cartela — o rótulo "Início da nova cartela" no histórico. */
+export function ehInicioDeCartela(dose: Pick<DoseDoCiclo, 'numeroNoCiclo'>): boolean {
+  return dose.numeroNoCiclo === 1;
+}
+
+/**
+ * Dose de início de cartela ainda à espera da confirmação: dia 1 não
+ * resolvido cujo dia cai fora de um ciclo em andamento. O dia 1 de um ciclo
+ * já ancorado (ex.: cadastro em uso no dia 1 da cartela) cai em 'ativo' e é
+ * uma dose comum.
+ */
+export function ehInicioDeCartelaPendente(esquema: EsquemaCiclico, dose: DoseDoCiclo): boolean {
+  return (
+    dose.numeroNoCiclo === 1 &&
+    (dose.status === 'pendente' || dose.status === 'aguardando') &&
+    dose.dataHoraPrevista !== null &&
+    calcularStatusDoDia(esquema, dose.dataHoraPrevista).fase === 'em_espera'
+  );
+}
+
+export type DiaProjetadoCiclico =
+  | { dia: Date; fase: 'ativo'; horario: Date; diaDoCiclo: number }
+  | { dia: Date; fase: 'pausa' }
+  | { dia: Date; fase: 'inicio-cartela'; horario: Date };
+
+/**
+ * Projeção para o calendário (inicio-de-cartela): o ciclo atual como está e,
+ * a partir do início previsto, ciclos seguidos (início, dias ativos, pausa)
+ * supondo que cada cartela começa logo depois da pausa anterior. Uma cartela
+ * atrasada é suposta começando `hoje`. `ate` é exclusivo.
+ */
+export function projetarCiclos(esquema: EsquemaCiclico, de: Date, ate: Date, hoje: Date): DiaProjetadoCiclico[] {
+  const [horario] = esquema.horarios;
+  if (!horario) return [];
+
+  const inicioPrevisto = inicioPrevistoDaCartela(esquema);
+  const ancoraProjecao = inicioPrevisto ? startOfDay(inicioPrevisto < startOfDay(hoje) ? hoje : inicioPrevisto) : null;
+  const duracaoCiclo = esquema.diasAtivos + esquema.diasPausa;
+
+  const dias: DiaProjetadoCiclico[] = [];
+  for (let dia = startOfDay(de); dia < ate; dia = addDays(dia, 1)) {
+    const status = calcularStatusDoDia(esquema, dia);
+    if (status.fase === 'ativo') {
+      dias.push({ dia, fase: 'ativo', horario: combinarDataEHorario(dia, horario), diaDoCiclo: status.diaDoCiclo });
+      continue;
+    }
+    if (status.fase === 'pausa') {
+      dias.push({ dia, fase: 'pausa' });
+      continue;
+    }
+    if (!ancoraProjecao || dia < ancoraProjecao) continue;
+
+    const posicao = differenceInCalendarDays(dia, ancoraProjecao) % duracaoCiclo;
+    if (posicao === 0) {
+      dias.push({ dia, fase: 'inicio-cartela', horario: combinarDataEHorario(dia, horario) });
+    } else if (posicao < esquema.diasAtivos) {
+      dias.push({ dia, fase: 'ativo', horario: combinarDataEHorario(dia, horario), diaDoCiclo: posicao + 1 });
+    } else {
+      dias.push({ dia, fase: 'pausa' });
+    }
+  }
+  return dias;
+}

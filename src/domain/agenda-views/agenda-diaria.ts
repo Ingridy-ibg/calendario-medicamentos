@@ -1,12 +1,12 @@
-import { addDays, startOfDay } from 'date-fns';
+import { addDays, addMinutes, format, isSameDay, startOfDay } from 'date-fns';
 
 import { contarDosesRegistradasNoIntervalo, listarDosesDoIntervalo, STATUS_NAO_RESOLVIDOS } from '@/db/repositories/doses';
 import { listarEsquemasAtivos, listarEsquemasNaoRemovidos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { StatusDose } from '@/db/schema';
-import { estaAtrasada } from '@/domain/adherence-history/classificacao';
-import { calcularStatusDoDia } from '@/domain/dose-scheduling/ciclico';
+import { estaAtrasada, TOLERANCIA_ATRASO_MIN } from '@/domain/adherence-history/classificacao';
+import { calcularStatusDoDia, ehInicioDeCartelaPendente, inicioPrevistoDaCartela } from '@/domain/dose-scheduling/ciclico';
 import { combinarDataEHorario } from '@/domain/dose-scheduling/horario';
 import { type AlertaEstoque, alertaVisivelNaLista } from '@/domain/medication-stock/alerta';
 import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
@@ -44,8 +44,9 @@ export interface ItemAgendaSeNecessario {
 
 /**
  * Cíclico sem ciclo em andamento (recém-cadastrado ou depois do fim da
- * pausa): não tem linha em `doses`, mas precisa aparecer para o usuário
- * iniciar a nova cartela (change fix-cyclic-and-rolling-window).
+ * pausa): aparece para o usuário iniciar a nova cartela (change
+ * fix-cyclic-and-rolling-window). A dose de início de cartela pendente não
+ * vira um item à parte — este item a representa (inicio-de-cartela).
  */
 export interface ItemAgendaAguardandoCartela {
   tipo: 'aguardando_cartela';
@@ -55,8 +56,29 @@ export interface ItemAgendaAguardandoCartela {
   dosagem: string;
   /** Hoje no horário do ciclo — define a seção (manhã/tarde/noite) e a ordem. */
   horario: Date | null;
+  /** Dia e horário previstos para o início da nova cartela (`null` sem data definida). */
+  inicioPrevisto: Date | null;
+  /** O início previsto já passou há mais de 30 minutos (mesma tolerância das doses). */
+  atrasada: boolean;
+  /** O início previsto é hoje: conta no resumo do dia como dose agendada. */
+  inicioHoje: boolean;
   /** Estoque insuficiente, baixo ou baixo leve (a sobra só aparece no detalhe). */
   alertaEstoque: AlertaEstoque;
+}
+
+/**
+ * Quando começa a nova cartela, para a agenda (specs/agenda-views): "hoje às
+ * 22:00", "amanhã às 22:00", "atrasada desde 29/10" ou, mais adiante,
+ * "em 05/11 às 22:00". `null` quando não há início definido.
+ */
+export function textoInicioPrevisto(item: Pick<ItemAgendaAguardandoCartela, 'inicioPrevisto' | 'atrasada'>, agora: Date): string | null {
+  const { inicioPrevisto } = item;
+  if (!inicioPrevisto) return null;
+  if (item.atrasada) return `atrasada desde ${format(inicioPrevisto, 'dd/MM')}`;
+  const horario = format(inicioPrevisto, 'HH:mm');
+  if (isSameDay(inicioPrevisto, agora)) return `hoje às ${horario}`;
+  if (isSameDay(inicioPrevisto, addDays(agora, 1))) return `amanhã às ${horario}`;
+  return `em ${format(inicioPrevisto, 'dd/MM')} às ${horario}`;
 }
 
 export type ItemAgenda = ItemAgendaDose | ItemAgendaSeNecessario | ItemAgendaAguardandoCartela;
@@ -96,6 +118,11 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
     const medicamento = buscarMedicamentoPorId(db, esquema.medicamentoId);
     if (!medicamento || medicamento.deletedAt) return [];
     if (!medicamento.naAgenda && STATUS_NAO_RESOLVIDOS.includes(dose.status)) return [];
+    // A dose de início de cartela pendente é representada pelo item "aguardando nova cartela".
+    if (esquema.tipo === 'CICLICO') {
+      const ciclico = paraEsquemaDominio(esquema);
+      if (ciclico.tipo === 'CICLICO' && ehInicioDeCartelaPendente(ciclico, dose)) return [];
+    }
 
     return [
       {
@@ -146,6 +173,7 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
       const medicamento = buscarMedicamentoPorId(db, esquema.medicamentoId);
       if (!medicamento || medicamento.deletedAt) return [];
       const [horario] = esquema.horarios;
+      const inicioPrevisto = inicioPrevistoDaCartela(esquema);
 
       return [
         {
@@ -155,6 +183,9 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
           nome: medicamento.nome,
           dosagem: medicamento.dosagem,
           horario: horario ? combinarDataEHorario(inicioDoDia, horario) : null,
+          inicioPrevisto,
+          atrasada: inicioPrevisto !== null && hoje > addMinutes(inicioPrevisto, TOLERANCIA_ATRASO_MIN),
+          inicioHoje: inicioPrevisto !== null && isSameDay(inicioPrevisto, hoje),
           alertaEstoque: alertaDe(linha, medicamento),
         },
       ];

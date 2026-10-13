@@ -6,6 +6,7 @@ import m0001 from './0001_next_warbound.sql';
 import m0002 from './0002_dizzy_charles_xavier.sql';
 import m0003 from './0003_magical_vapor.sql';
 import m0004 from './0004_parched_salo.sql';
+import m0005 from './0005_curved_mockingbird.sql';
 
   export default {
     journal,
@@ -14,7 +15,8 @@ import m0004 from './0004_parched_salo.sql';
 m0001,
 m0002,
 m0003,
-m0004
+m0004,
+m0005
     }
   }
   

@@ -18,7 +18,7 @@ import type { PrevisaoEstoque } from '@/domain/medication-management/gestao';
 import { type PreviaCadastro } from '@/domain/medication-registration/previa';
 import { adicionarAAgenda, cadastrarMedicamento, ErroValidacao, prepararCadastro, prepararVoltaAAgenda } from '@/domain/medication-registration/registration';
 import { textoEstoque } from '@/domain/medication-stock/caixas';
-import type { DadosFormularioMedicamento } from '@/domain/medication-registration/types';
+import type { DadosFormularioMedicamento, EscolhaInicioCartela } from '@/domain/medication-registration/types';
 import { useTheme } from '@/hooks/use-theme';
 import { aposSalvarMedicamento } from '@/lib/apos-salvar-medicamento';
 import { useCadastroStore } from '@/state/cadastro-store';
@@ -99,6 +99,86 @@ function CartaoEscuro({ titulo, detalhe, principal, unidade, linhas }: {
   );
 }
 
+const OPCOES_INICIO: { valor: EscolhaInicioCartela; rotulo: string }[] = [
+  { valor: 'ja_tomei', rotulo: 'Já tomei hoje' },
+  { valor: 'amanha', rotulo: 'Começo amanhã' },
+];
+
+/**
+ * Início da primeira cartela de um cíclico novo ou de volta à agenda
+ * (inicio-de-cartela, specs/medication-registration): o início resultante ou,
+ * se o horário de hoje já passou, a pergunta do 1º comprimido.
+ */
+function CartaoNovaCartela({
+  novaCartela,
+  diasAtivos,
+  agora,
+  destacar,
+  aoEscolher,
+}: {
+  novaCartela: NonNullable<PreviaCadastro['novaCartela']>;
+  diasAtivos: number;
+  agora: Date;
+  destacar: boolean;
+  aoEscolher: (escolha: EscolhaInicioCartela) => void;
+}) {
+  const theme = useTheme();
+  const resultado = novaCartela.comecouHoje
+    ? `Dia 1 de ${diasAtivos}: hoje`
+    : novaCartela.inicio
+      ? `Nova cartela: ${quando(novaCartela.inicio, agora).toLowerCase()}`
+      : null;
+  return (
+    <Cartao style={destacar ? { borderWidth: 2, borderColor: theme.statusAtraso } : undefined}>
+      <CabecalhoSecao>Cartela</CabecalhoSecao>
+      {novaCartela.pergunta ? (
+        <View style={{ gap: 10 }}>
+          <ThemedText style={{ fontFamily: FAMILIA_TEXTO[700] }}>Você já tomou o 1º comprimido hoje?</ThemedText>
+          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
+            {OPCOES_INICIO.map(({ valor, rotulo }) => {
+              const ativo = novaCartela.escolha === valor;
+              return (
+                <Tocavel
+                  key={valor}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: ativo }}
+                  onPress={() => aoEscolher(valor)}
+                  style={{
+                    flex: 1,
+                    minHeight: 48,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: ativo ? 2 : 1.5,
+                    borderColor: ativo ? theme.accent : theme.border,
+                    backgroundColor: ativo ? theme.accentSoft : theme.surface,
+                  }}>
+                  <ThemedText style={{ fontFamily: FAMILIA_TEXTO[700], color: ativo ? theme.onAccentSoft : theme.text }}>{rotulo}</ThemedText>
+                </Tocavel>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+      {resultado ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.accent }}>
+            <Icone nome={novaCartela.comecouHoje ? 'check' : 'relogio'} cor={theme.onAccent} tamanho={18} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <ThemedText style={{ fontFamily: FAMILIA_TEXTO[700] }}>{resultado}</ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {novaCartela.comecouHoje
+                ? 'O 1º comprimido fica registrado como tomado, sem mudar o estoque.'
+                : 'Na hora, toca o alarme do 1º comprimido. O ciclo começa quando você confirmar.'}
+            </ThemedText>
+          </View>
+        </View>
+      ) : null}
+    </Cartao>
+  );
+}
+
 /**
  * "Confira antes de salvar" (register-ongoing-medication): mostra a prévia
  * calculada e só grava em "Confirmar e agendar". "Ajustar" volta ao
@@ -111,6 +191,7 @@ export default function ConfirmarCadastroScreen() {
   const { dados, previa, modo, definir, limpar } = useCadastroStore();
   const [aviso, setAviso] = useState<string | null>(null);
   const [adicionarNaAgenda, setAdicionarNaAgenda] = useState(true);
+  const [destacarPergunta, setDestacarPergunta] = useState(false);
 
   if (!dados || !previa) return <ThemedView style={{ flex: 1 }} />;
   const { agora } = previa;
@@ -133,11 +214,41 @@ export default function ConfirmarCadastroScreen() {
     }
   }
 
+  /** Responde "Você já tomou o 1º comprimido hoje?" e recalcula a prévia com a escolha. */
+  function escolherInicio(escolha: EscolhaInicioCartela) {
+    const novosDados = { ...dados!, inicioCartela: escolha };
+    const agoraEscolha = new Date();
+    const novaPrevia = recalcular(() =>
+      modo.tipo === 'volta_agenda'
+        ? prepararVoltaAAgenda(db, modo.medicamentoId, agoraEscolha, escolha).previa
+        : prepararCadastro(novosDados, agoraEscolha),
+    );
+    if (!novaPrevia) return;
+    definir(novosDados, novaPrevia);
+    setDestacarPergunta(false);
+    setAviso(null);
+  }
+
+  /**
+   * Cíclico cujo horário de hoje passou (inclusive com a tela aberta) e sem
+   * resposta à pergunta: mostra a pergunta destacada e não salva.
+   */
+  function faltaEscolherInicio(novaPrevia: PreviaCadastro): boolean {
+    if (!novaPrevia.novaCartela?.pergunta || novaPrevia.novaCartela.escolha) return false;
+    definir(dados!, novaPrevia);
+    setDestacarPergunta(true);
+    setAviso('Responda se você já tomou o 1º comprimido hoje para continuar.');
+    return true;
+  }
+
   function confirmar() {
     const agoraConfirmacao = new Date();
     if (modo.tipo === 'volta_agenda') {
-      const novaPrevia = recalcular(() => prepararVoltaAAgenda(db, modo.medicamentoId, agoraConfirmacao).previa);
+      const novaPrevia = recalcular(
+        () => prepararVoltaAAgenda(db, modo.medicamentoId, agoraConfirmacao, dados!.inicioCartela).previa,
+      );
       if (!novaPrevia) return;
+      if (faltaEscolherInicio(novaPrevia)) return;
       if (assinatura(novaPrevia) !== assinatura(previa!)) {
         definir(dados!, novaPrevia);
         setAviso('Os horários mudaram desde que você abriu esta tela. Confira de novo.');
@@ -153,6 +264,7 @@ export default function ConfirmarCadastroScreen() {
     // Só cadastrar descarta "Já estava tomando" — então nem o valida (fix-agenda-membership-review).
     const novaPrevia = recalcular(() => prepararCadastro(adicionarNaAgenda ? dados! : { ...dados!, emUso: undefined }, agoraConfirmacao));
     if (!novaPrevia) return;
+    if (adicionarNaAgenda && faltaEscolherInicio(novaPrevia)) return;
     if (adicionarNaAgenda && assinatura(novaPrevia) !== assinatura(previa!)) {
       // O relógio andou e mudou o que seria gravado: mostra de novo em vez de salvar.
       definir(dados!, novaPrevia);
@@ -227,7 +339,15 @@ export default function ConfirmarCadastroScreen() {
             </Cartao>
           ) : null}
 
-          {!naAgenda ? null : cartela ? (
+          {!naAgenda ? null : previa.novaCartela && dados.esquema.tipo === 'CICLICO' ? (
+            <CartaoNovaCartela
+              novaCartela={previa.novaCartela}
+              diasAtivos={dados.esquema.diasAtivos}
+              agora={agora}
+              destacar={destacarPergunta}
+              aoEscolher={escolherInicio}
+            />
+          ) : cartela ? (
             <CartaoEscuro
               titulo="Cartela atual"
               detalhe={cartela.fase === 'ativo' ? `dia ${cartela.dia} de ${cartela.total}` : `pausa: dia ${cartela.dia} de ${cartela.total}`}

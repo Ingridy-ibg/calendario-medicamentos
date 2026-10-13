@@ -191,3 +191,70 @@ describe('confirmarNovaCartelaCiclica — ciclo continua depois de reabrir o app
     expect(amanha?.dataHoraPrevista).toEqual(new Date(2026, 9, 13, 22, 0));
   });
 });
+
+describe('confirmarNovaCartelaCiclica com dose de início pendente (inicio-de-cartela)', () => {
+  let db: TestDb;
+  let medicamentoId: string;
+  let esquemaId: string;
+  const esquema = () => paraEsquemaDominio(buscarEsquemaPorId(db, esquemaId)!) as EsquemaCiclico;
+  const doses = () => listarDosesPorEsquema(db, esquemaId);
+
+  beforeEach(() => {
+    db = createTestDb();
+    medicamentoId = inserirMedicamento(db, {
+      nome: 'Anticoncepcional',
+      dosagem: '1 comp.',
+      criticidade: 'especial',
+      quantidadeEmEstoque: 28,
+      quantidadePorEmbalagem: 28,
+    }).id;
+    // Ciclo anterior com dia 1 em 01/10: início previsto 29/10 às 22:00.
+    esquemaId = inserirEsquema(db, {
+      tipo: 'CICLICO',
+      medicamentoId,
+      diasAtivos: 21,
+      diasPausa: 7,
+      dataInicioCiclo: new Date(2026, 9, 1, 22, 0),
+      horarios: ['22:00'],
+    }).id;
+    materializarJanela(db, esquema(), new Date(2026, 9, 25, 10));
+    expect(doses().map((dose) => dose.dataHoraPrevista)).toEqual([new Date(2026, 9, 29, 22, 0)]);
+  });
+
+  it('confirmação dois dias depois: a dose de início fica tomada com atraso e o dia 2 é o dia seguinte', () => {
+    const [inicio] = doses();
+    const agora = new Date(2026, 9, 31, 8, 0);
+
+    confirmarNovaCartelaCiclica(db, esquema(), agora);
+
+    expect(buscarDosePorId(db, inicio.id)).toMatchObject({ status: 'tomada_com_atraso', dataHoraRegistro: agora });
+    expect(buscarEsquemaPorId(db, esquemaId)).toMatchObject({ dataInicioCiclo: agora, inicioCartelaPrevisto: null });
+    expect(doses().filter((dose) => dose.numeroNoCiclo === 1 && dose.dataHoraPrevista! < new Date(2026, 10, 20))).toHaveLength(1);
+    const dia2 = doses().find((dose) => dose.numeroNoCiclo === 2);
+    expect(dia2?.dataHoraPrevista).toEqual(new Date(2026, 10, 1, 22, 0));
+    expect(buscarMedicamentoPorId(db, medicamentoId)?.quantidadeEmEstoque).toBe(27);
+  });
+
+  it('confirmação no horário: a dose de início fica tomada, sem outro dia 1 hoje', () => {
+    const [inicio] = doses();
+
+    confirmarNovaCartelaCiclica(db, esquema(), new Date(2026, 9, 29, 22, 5));
+
+    expect(buscarDosePorId(db, inicio.id)?.status).toBe('tomada');
+    expect(doses().filter((dose) => dose.dataHoraPrevista!.getDate() === 29 && dose.dataHoraPrevista!.getMonth() === 9)).toHaveLength(1);
+    expect(doses().find((dose) => dose.numeroNoCiclo === 2)?.dataHoraPrevista).toEqual(new Date(2026, 9, 30, 22, 0));
+  });
+
+  it('começando antes do previsto: a dose de início é descartada e o dia 1 é hoje', () => {
+    const [inicio] = doses();
+    const agora = new Date(2026, 9, 28, 21, 0);
+
+    confirmarNovaCartelaCiclica(db, esquema(), agora);
+
+    expect(buscarDosePorId(db, inicio.id)).toBeUndefined();
+    const dia1 = doses().find((dose) => dose.numeroNoCiclo === 1 && dose.status === 'tomada');
+    expect(dia1?.dataHoraPrevista).toEqual(new Date(2026, 9, 28, 22, 0));
+    expect(doses().find((dose) => dose.numeroNoCiclo === 2)?.dataHoraPrevista).toEqual(new Date(2026, 9, 29, 22, 0));
+    expect(buscarMedicamentoPorId(db, medicamentoId)?.quantidadeEmEstoque).toBe(27);
+  });
+});

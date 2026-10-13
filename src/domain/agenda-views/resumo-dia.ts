@@ -9,19 +9,30 @@ export interface ResumoDoDia {
   total: number;
   /** Status de cada dose agendada, na ordem do horário (uma marca por dose). */
   marcas: StatusDose[];
-  /** Dose pendente/aguardando de menor horário, mesmo que já tenha passado. */
-  proxima: ItemAgendaDose | null;
+  /**
+   * Dose pendente/aguardando de menor horário, mesmo que já tenha passado —
+   * ou o início de cartela de hoje, que conta como dose (inicio-de-cartela).
+   */
+  proxima: ItemComHorario | null;
   /** Há doses agendadas e nenhuma ainda pendente ou aguardando. */
   concluido: boolean;
 }
 
 const NAO_RESOLVIDOS: StatusDose[] = ['pendente', 'aguardando'];
 
-function doses(itens: ItemAgenda[]): ItemAgendaDose[] {
-  return itens.filter((item): item is ItemAgendaDose => item.tipo === 'dose');
+export type ItemComHorario = ItemAgendaDose | ItemAgendaAguardandoCartela;
+
+/** Status no resumo: a dose de início de cartela de hoje ainda não confirmada conta como pendente. */
+function statusNoResumo(item: ItemComHorario): StatusDose {
+  return item.tipo === 'dose' ? item.status : 'pendente';
 }
 
-type ItemComHorario = ItemAgendaDose | ItemAgendaAguardandoCartela;
+/** Doses agendadas de hoje, incluindo o início de cartela previsto para hoje (aguardando confirmação). */
+function doses(itens: ItemAgenda[]): ItemComHorario[] {
+  return itens.filter(
+    (item): item is ItemComHorario => item.tipo === 'dose' || (item.tipo === 'aguardando_cartela' && item.inicioHoje),
+  );
+}
 
 function horarioOuInicio(item: ItemComHorario): number {
   return item.horario?.getTime() ?? Number.NEGATIVE_INFINITY;
@@ -31,12 +42,13 @@ function horarioOuInicio(item: ItemComHorario): number {
 export function resumirDia(itens: ItemAgenda[]): ResumoDoDia {
   // `sort` estável: em empate de horário, vale a ordem da lista.
   const agendadas = [...doses(itens)].sort((a, b) => horarioOuInicio(a) - horarioOuInicio(b));
-  const pendentes = agendadas.filter((item) => NAO_RESOLVIDOS.includes(item.status));
+  const marcas = agendadas.map(statusNoResumo);
+  const pendentes = agendadas.filter((_, indice) => NAO_RESOLVIDOS.includes(marcas[indice]));
 
   return {
-    tomadas: agendadas.filter((item) => item.status === 'tomada' || item.status === 'tomada_com_atraso').length,
+    tomadas: marcas.filter((status) => status === 'tomada' || status === 'tomada_com_atraso').length,
     total: agendadas.length,
-    marcas: agendadas.map((item) => item.status),
+    marcas,
     proxima: pendentes[0] ?? null,
     concluido: agendadas.length > 0 && pendentes.length === 0,
   };

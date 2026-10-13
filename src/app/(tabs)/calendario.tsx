@@ -40,6 +40,7 @@ const LEGENDA: { rotulo: string; marcador: MarcadorDia }[] = [
   { rotulo: 'Perdida', marcador: { token: 'statusPerdida', estilo: 'cheio' } },
   { rotulo: 'Atrasada', marcador: { token: 'statusAtraso', estilo: 'contorno' } },
   { rotulo: 'Prevista', marcador: { token: 'accent', estilo: 'contorno' } },
+  { rotulo: 'Nova cartela', marcador: { token: 'accent', estilo: 'anel' } },
 ];
 
 function capitalizar(texto: string) {
@@ -49,6 +50,25 @@ function capitalizar(texto: string) {
 function Ponto({ marcador, tamanho = 6 }: { marcador: MarcadorDia | null; tamanho?: number }) {
   const theme = useTheme();
   const cor = marcador ? theme[marcador.token] : 'transparent';
+  if (marcador?.estilo === 'anel') {
+    // Início de nova cartela: ponto cheio dentro de um anel, maior que os demais.
+    const externo = tamanho + 4;
+    return (
+      <View
+        style={{
+          width: externo,
+          height: externo,
+          borderRadius: externo / 2,
+          borderWidth: 1.5,
+          borderColor: cor,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginVertical: -2,
+        }}>
+        <View style={{ width: tamanho - 2, height: tamanho - 2, borderRadius: (tamanho - 2) / 2, backgroundColor: cor }} />
+      </View>
+    );
+  }
   return (
     <View
       style={{
@@ -73,8 +93,9 @@ function descreverItem(item: ItemDiaCalendario): { detalhe: string; status: stri
     };
   }
   if (item.tipo === 'historico') {
+    const horario = item.horario ? format(item.horario, 'HH:mm') : 'Sem horário';
     return {
-      detalhe: item.horario ? format(item.horario, 'HH:mm') : 'Sem horário',
+      detalhe: item.inicioDeCartela ? `Início da nova cartela · ${horario}` : horario,
       status: ROTULOS_STATUS_DOSE[item.status],
       token: TOKEN_STATUS_DOSE[item.status],
       marcador:
@@ -89,6 +110,14 @@ function descreverItem(item: ItemDiaCalendario): { detalhe: string; status: stri
       status: 'Prevista',
       token: 'textSecondary',
       marcador: { token: 'accent', estilo: 'contorno' },
+    };
+  }
+  if (item.tipo === 'inicio-cartela') {
+    return {
+      detalhe: `Início da nova cartela · ${format(item.horario, 'HH:mm')}`,
+      status: 'Nova cartela',
+      token: 'accent',
+      marcador: { token: 'accent', estilo: 'anel' },
     };
   }
   return { detalhe: 'Cartela em pausa', status: 'Dia de pausa', token: 'textSecondary', marcador: { token: 'statusNeutro', estilo: 'contorno' } };

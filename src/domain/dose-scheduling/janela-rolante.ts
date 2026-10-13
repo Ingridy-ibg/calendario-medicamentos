@@ -7,10 +7,11 @@ import {
   substituirDosesAPartirDe,
   substituirDosesFuturas,
 } from '@/db/repositories/doses';
-import { listarEsquemasAtivos, paraEsquemaDominio } from '@/db/repositories/esquemas';
+import { definirInicioCartelaPrevisto, listarEsquemasAtivos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import type { AppDb } from '@/db/repositories/types';
 
-import { gerarDosesCiclico } from './ciclico';
+import { gerarDoseDeInicioDeCartela, gerarDosesCiclico } from './ciclico';
+import { combinarDataEHorario } from './horario';
 import { gerarDosesDiario } from './diario';
 import { gerarDosesDiasSemana } from './dias-semana';
 import type { DoseGerada, Esquema } from './types';
@@ -29,7 +30,9 @@ function gerarDosesParaJanela(esquema: Esquema, de: Date, ate: Date): DoseGerada
     case 'DIAS_SEMANA':
       return gerarDosesDiasSemana(esquema, de, ate);
     case 'CICLICO':
-      return gerarDosesCiclico(esquema, de, ate);
+      // Os dias ativos do ciclo atual e, se cair na janela, a dose de início
+      // da próxima cartela — nunca os dias seguintes dela (inicio-de-cartela).
+      return [...gerarDosesCiclico(esquema, de, ate), ...gerarDoseDeInicioDeCartela(esquema, de, ate)];
     case 'INTERVALO_HORAS':
     case 'SE_NECESSARIO':
       return null;
@@ -94,7 +97,8 @@ export function rematerializarJanelaAposEdicao(db: AppDb, esquema: Esquema, agor
  * existentes (ao contrário de `materializarJanela`, que substitui as não
  * resolvidas e por isso não serve para rodar a cada abertura). Dias já
  * passados não são preenchidos; o dia de hoje é. Esquemas sem grade
- * (intervalo em horas, se necessário) e cíclicos em espera não geram nada.
+ * (intervalo em horas, se necessário) não geram nada; um cíclico em espera
+ * gera só a dose de início da nova cartela.
  */
 export function renovarJanela(db: AppDb, esquema: Esquema, agora: Date): number {
   const existentes = listarDosesPorEsquema(db, esquema.id).filter((dose) => dose.dataHoraPrevista !== null);
@@ -120,7 +124,24 @@ export function renovarJanela(db: AppDb, esquema: Esquema, agora: Date): number 
   return inseridas;
 }
 
+/**
+ * Correção dos cíclicos que ficaram aguardando nova cartela sem data, de
+ * antes de inicio-de-cartela: o início passa a ser hoje, se o horário do
+ * ciclo ainda não passou, ou amanhã. Idempotente — quem já tem data ou ciclo
+ * não muda.
+ */
+export function definirInicioDosCiclicosSemData(db: AppDb, agora: Date) {
+  for (const linha of listarEsquemasAtivos(db)) {
+    if (linha.tipo !== 'CICLICO' || linha.dataInicioCiclo !== null || linha.inicioCartelaPrevisto !== null) continue;
+    const [horario] = linha.horarios ?? [];
+    if (!horario) continue;
+    const hoje = startOfDay(agora);
+    definirInicioCartelaPrevisto(db, linha.id, combinarDataEHorario(hoje, horario) > agora ? hoje : addDays(hoje, 1), agora);
+  }
+}
+
 /** Renova a janela de todo esquema ativo — na abertura do app, na volta ao primeiro plano e na tarefa periódica. */
 export function renovarJanelasAtivas(db: AppDb, agora: Date = new Date()): number {
+  definirInicioDosCiclicosSemData(db, agora);
   return listarEsquemasAtivos(db).reduce((total, linha) => total + renovarJanela(db, paraEsquemaDominio(linha), agora), 0);
 }

@@ -15,6 +15,7 @@ const historico = (status: StatusDose, atrasada = false): ItemDiaCalendario => (
 });
 const previsto: ItemDiaCalendario = { tipo: 'previsto', medicamentoId: 'm', nome: 'X', horario: new Date(2026, 9, 20, 8), estimado: false };
 const pausa: ItemDiaCalendario = { tipo: 'pausa-ciclo', medicamentoId: 'm', nome: 'X' };
+const inicioCartela: ItemDiaCalendario = { tipo: 'inicio-cartela', medicamentoId: 'm', nome: 'X', horario: new Date(2026, 9, 29, 22) };
 
 describe('marcadorDoDia', () => {
   it('dia sem nada não tem marcador', () => {
@@ -46,5 +47,16 @@ describe('marcadorDoDia', () => {
 
   it('dia de pausa fica em contorno neutro', () => {
     expect(marcadorDoDia([pausa])).toEqual({ token: 'statusNeutro', estilo: 'contorno' });
+  });
+
+  it('início de nova cartela tem marca própria, que vence a de dose prevista', () => {
+    expect(marcadorDoDia([inicioCartela])).toEqual({ token: 'accent', estilo: 'anel' });
+    expect(marcadorDoDia([previsto, inicioCartela])).toEqual({ token: 'accent', estilo: 'anel' });
+  });
+
+  it('início de nova cartela perde para os status do histórico', () => {
+    expect(marcadorDoDia([historico('perdida'), inicioCartela])).toEqual({ token: 'statusPerdida', estilo: 'cheio' });
+    expect(marcadorDoDia([historico('tomada'), inicioCartela])).toEqual({ token: 'statusTomada', estilo: 'cheio' });
+    expect(marcadorDoDia([historico('pendente', true), inicioCartela])).toEqual({ token: 'statusAtraso', estilo: 'contorno' });
   });
 });
