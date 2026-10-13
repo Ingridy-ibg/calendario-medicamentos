@@ -1,18 +1,13 @@
 import type { TipoEsquema } from '@/db/schema';
 
-export interface ConteudoTipoEsquema {
-  titulo: string;
-  descricao: string;
-  exemplo: string;
-  pontos: string[];
-}
+import type { ConteudoAjuda } from './ajuda';
 
 /**
  * Explicação de cada tipo de esquema no modal de ajuda do formulário
  * (schedule-type-help; artboard "Info — tipos de esquema"). As chaves seguem
  * a ordem de `TIPOS_ESQUEMA`. Ao mudar as regras de um tipo, revise o texto.
  */
-export const CONTEUDO_TIPOS_ESQUEMA: Record<TipoEsquema, ConteudoTipoEsquema> = {
+export const CONTEUDO_TIPOS_ESQUEMA: Record<TipoEsquema, ConteudoAjuda> = {
   DIARIO: {
     titulo: 'Diário',
     descricao: 'Horários fixos, todos os dias.',

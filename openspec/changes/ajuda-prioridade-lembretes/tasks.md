@@ -1,12 +1,12 @@
 ## 1. Pré-requisito e conteúdo
 
 - [ ] 1.1 Confirmar que `alarme-tela-cheia` e `identidade-e-observacoes` já foram aplicadas. Se não, ajustar o texto do Especial ao comportamento atual antes de seguir. Verificar: `openspec list` mostra as duas concluídas/arquivadas, ou o texto ajustado está registrado no PR
-- [ ] 1.2 Mover a interface `ConteudoTipoEsquema` para um tipo comum `ConteudoAjuda` e criar `src/constants/prioridades.ts` com `CONTEUDO_PRIORIDADES` (Comum e Especial, textos da spec). Verificar: novo `prioridades.test.ts` (ordem de `CRITICIDADES` e nenhum campo vazio) passa no `npx vitest run`
+- [x] 1.2 Mover a interface `ConteudoTipoEsquema` para um tipo comum `ConteudoAjuda` e criar `src/constants/prioridades.ts` com `CONTEUDO_PRIORIDADES` (Comum e Especial, textos da spec). Verificar: novo `prioridades.test.ts` (ordem de `CRITICIDADES` e nenhum campo vazio) passa no `npx vitest run`
 
 ## 2. Modal reutilizável
 
 - [ ] 2.1 Extrair `ModalAjudaPaginada` de `ajuda-tipos-esquema.tsx` (overlay, cartão, cabeçalho "X de N", setas, bolinhas, reinício a cada abertura, `onRequestClose`) e reescrever `AjudaTiposEsquema` sobre ele. Verificar: no app, os 5 cenários de "Explicação dos tipos de esquema no formulário" continuam valendo
-- [ ] 2.2 Criar `AjudaPrioridades` sobre `ModalAjudaPaginada`, com as ilustrações de miniatura de notificação (Comum) e de miniatura do alarme Noite (Especial). Verificar: `npx tsc --noEmit` passa
+- [x] 2.2 Criar `AjudaPrioridades` sobre `ModalAjudaPaginada`, com as ilustrações de miniatura de notificação (Comum) e de miniatura do alarme Noite (Especial). Verificar: `npx tsc --noEmit` passa
 
 ## 3. Formulário
 
@@ -15,4 +15,4 @@
 
 ## 4. Validação
 
-- [ ] 4.1 Rodar `npx vitest run` e `npx tsc --noEmit`. Verificar: ambos passam
+- [x] 4.1 Rodar `npx vitest run` e `npx tsc --noEmit`. Verificar: ambos passam

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { AjudaPrioridades } from '@/components/medicamento/ajuda-prioridades';
 import { AjudaTiposEsquema } from '@/components/medicamento/ajuda-tipos-esquema';
 import { ESTADO_INICIO_PADRAO, type EstadoInicio, SecaoInicio } from '@/components/medicamento/secao-inicio';
 import { Botao } from '@/components/ui/botao';
@@ -250,6 +251,7 @@ export function FormularioMedicamento({
 
   const [tipo, setTipo] = useState<TipoEsquema>(valoresIniciais.tipo);
   const [ajudaTiposVisivel, setAjudaTiposVisivel] = useState(false);
+  const [ajudaPrioridadesVisivel, setAjudaPrioridadesVisivel] = useState(false);
   const [horarios, setHorarios] = useState<string[]>(valoresIniciais.horarios);
   const [duracao, setDuracao] = useState<ModoDuracao>(valoresIniciais.duracao);
   const [intervaloHoras, setIntervaloHoras] = useState(valoresIniciais.intervaloHoras);
@@ -560,7 +562,22 @@ export function FormularioMedicamento({
               </ThemedText>
             </SecaoFormulario>
 
-            <SecaoFormulario titulo="Prioridade dos lembretes">
+            <SecaoFormulario
+              titulo="Prioridade dos lembretes"
+              acao={
+                <Tocavel
+                  accessibilityRole="button"
+                  accessibilityLabel="O que é cada prioridade?"
+                  onPress={() => setAjudaPrioridadesVisivel(true)}
+                  style={{ width: 44, height: 44, marginRight: -10, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icone nome="info" cor={theme.accent} tamanho={24} />
+                </Tocavel>
+              }>
+              <AjudaPrioridades
+                visivel={ajudaPrioridadesVisivel}
+                criticidadeInicial={criticidadeAtual}
+                aoFechar={() => setAjudaPrioridadesVisivel(false)}
+              />
               <View accessibilityRole="radiogroup" style={{ gap: 10 }}>
                 {CRITICIDADES.map((opcao) => (
                   <OpcaoCriticidade
