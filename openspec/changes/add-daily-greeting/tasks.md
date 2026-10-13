@@ -8,13 +8,13 @@
 ## 2. Persistência e decisão de exibir
 
 - [x] 2.1 Ler/gravar `saudacao.ultimaExibicao` no kv-store (módulo fino em `src/lib/`, junto do perfil); verificar com teste de ida e volta usando o kv-store do ambiente de teste ou um dublê.
-- [x] 2.2 2.2 Em `_layout.tsx`, decidir boas-vindas × saudação × agenda na abertura a frio e reavaliar na volta ao primeiro plano via `AppState`, ignorando aberturas por notificação; verificar num dispositivo/emulador: primeira abertura do dia mostra a saudação, a segunda não, e abrir por notificação vai direto para a dose. **Implementado** (typecheck e testes ok); falta a verificação no aparelho.
+- [x] 2.2 Em `_layout.tsx`, decidir boas-vindas × saudação × agenda na abertura a frio e reavaliar na volta ao primeiro plano via `AppState`, ignorando aberturas por notificação; verificar num dispositivo/emulador: primeira abertura do dia mostra a saudação, a segunda não, e abrir por notificação vai direto para a dose. **Implementado** (typecheck e testes ok); falta a verificação no aparelho.
 
 ## 3. Telas
 
-- [x] 3.1 3.1 Criar `src/app/saudacao.tsx` conforme o artboard "Saudação ao abrir" (ilustração e cores por período, saudação, data e hora, resumo, cartão, "Ver agenda", barra de progresso), com passagem automática em 2,5 s, toque para pular, `router.replace` para a agenda e timer desligado com leitor de tela; verificar no app os três períodos (alterando a hora do aparelho) — a noite e a madrugada (ex.: 02:15) com meia-lua e nunca sol —, o tema escuro e o TalkBack. **Implementado** (typecheck e testes ok); falta a verificação no aparelho.
+- [x] 3.1 Criar `src/app/saudacao.tsx` conforme o artboard "Saudação ao abrir" (ilustração e cores por período, saudação, data e hora, resumo, cartão, "Ver agenda", barra de progresso), com passagem automática em 2,5 s, toque para pular, `router.replace` para a agenda e timer desligado com leitor de tela; verificar no app os três períodos (alterando a hora do aparelho) — a noite e a madrugada (ex.: 02:15) com meia-lua e nunca sol —, o tema escuro e o TalkBack. **Implementado** (typecheck e testes ok); falta a verificação no aparelho.
 - [x] 3.2 Adicionar as paletas da saudação em `theme.ts` e incluí-las no teste de contraste da `apply-visual-identity`; verificar com o teste passando.
-- [x] 3.3 3.3 Trocar o título do cabeçalho da agenda pela saudação do período, recalculada a cada foco, com reticências para nomes longos; verificar no app que o título muda ao voltar à agenda depois de 12:00 e que um nome longo não empurra os botões. **Implementado** (typecheck e testes ok); falta a verificação no aparelho.
+- [x] 3.3 Trocar o título do cabeçalho da agenda pela saudação do período, recalculada a cada foco, com reticências para nomes longos; verificar no app que o título muda ao voltar à agenda depois de 12:00 e que um nome longo não empurra os botões. **Implementado** (typecheck e testes ok); falta a verificação no aparelho.
 
 ## 4. Verificação de ponta a ponta
 
