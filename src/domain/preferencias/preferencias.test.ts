@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deveExibirBoasVindas,
   devePedirTelaCheia,
+  permissoesDoAlarmeAPedir,
   esquemaDaAparencia,
   inicialDoNome,
   lerAparencia,
@@ -72,5 +73,17 @@ describe('devePedirTelaCheia', () => {
   it('não pede de novo nem para comum', () => {
     expect(devePedirTelaCheia('especial', '1')).toBe(false);
     expect(devePedirTelaCheia('comum', null)).toBe(false);
+  });
+});
+
+describe('permissoesDoAlarmeAPedir', () => {
+  it('pede a tela cheia e depois a de aparecer sobre outros apps, só as que faltam', () => {
+    expect(permissoesDoAlarmeAPedir({ telaCheia: false, sobreOutrosApps: false })).toEqual(['telaCheia', 'sobreOutrosApps']);
+    expect(permissoesDoAlarmeAPedir({ telaCheia: true, sobreOutrosApps: false })).toEqual(['sobreOutrosApps']);
+    expect(permissoesDoAlarmeAPedir({ telaCheia: true, sobreOutrosApps: true })).toEqual([]);
+  });
+
+  it('estado desconhecido não é pedido', () => {
+    expect(permissoesDoAlarmeAPedir({ telaCheia: null, sobreOutrosApps: null })).toEqual([]);
   });
 });

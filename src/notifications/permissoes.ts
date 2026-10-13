@@ -3,7 +3,8 @@ import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import { getPermissionsAsync, requestPermissionsAsync } from 'expo-notifications';
 import { Platform } from 'react-native';
 
-import { permissoesDoAlarme } from '@/lib/alarme-dose';
+import { permissoesDoAlarmeAPedir } from '@/domain/preferencias/preferencias';
+import { abrirConfigSobreOutrosApps, permissoesDoAlarme } from '@/lib/alarme-dose';
 
 /**
  * `POST_NOTIFICATIONS` (Android 13+) é a única permissão daqui pedida por um
@@ -56,12 +57,33 @@ export async function solicitarPermissaoFullScreenIntent(): Promise<void> {
 }
 
 /**
+ * "Aparecer sobre outros apps" (alarme-tela-cheia, design.md, decisão 10):
+ * com ela, o alarme abre a tela por cima do app em uso. Como a tela cheia, só
+ * se concede nas Configurações.
+ */
+export async function solicitarPermissaoSobreOutrosApps(): Promise<void> {
+  abrirConfigSobreOutrosApps();
+}
+
+/**
+ * Primeiro cadastro de um especial: abre a configuração de tela cheia e, ao
+ * voltar dela, a de aparecer sobre outros apps — só as que ainda faltam.
+ * `startActivityAsync` só resolve quando a pessoa volta das Configurações.
+ */
+export async function solicitarPermissoesDoAlarme(): Promise<void> {
+  for (const permissao of permissoesDoAlarmeAPedir(permissoesDoAlarme())) {
+    if (permissao === 'telaCheia') await solicitarPermissaoFullScreenIntent();
+    else await solicitarPermissaoSobreOutrosApps();
+  }
+}
+
+/**
  * Pedido único da boas-vindas ("Ativar lembretes e começar", specs/onboarding)
  * — nenhum outro lugar chama isto. Sem isenção de otimização de bateria: os
  * alarmes de dose já disparam no Doze (fix-permissoes-e-respostas, design.md).
- * A permissão de full-screen intent (5.2) é pedida separadamente, no primeiro
- * cadastro de um medicamento especial — ver `solicitarPermissaoFullScreenIntent`
- * chamada a partir de `src/app/medicamento/novo.tsx`.
+ * As permissões de tela cheia e de aparecer sobre outros apps são pedidas
+ * separadamente, no primeiro cadastro de um medicamento especial — ver
+ * `solicitarPermissoesDoAlarme`, chamada de `src/lib/apos-salvar-medicamento.ts`.
  */
 export async function solicitarPermissoesEssenciais(): Promise<void> {
   await solicitarPermissaoPostNotifications();
@@ -77,11 +99,12 @@ export interface SituacaoPermissoes {
    */
   alarmeExato: boolean | null;
   telaCheia: boolean | null;
+  sobreOutrosApps: boolean | null;
 }
 
 /** Só consulta — nunca abre diálogo nem tela de Configurações (specs/user-profile). */
 export async function consultarPermissoes(): Promise<SituacaoPermissoes> {
   const { granted } = await getPermissionsAsync();
-  if (Platform.OS !== 'android') return { notificacoes: granted, alarmeExato: true, telaCheia: true };
+  if (Platform.OS !== 'android') return { notificacoes: granted, alarmeExato: true, telaCheia: true, sobreOutrosApps: true };
   return { notificacoes: granted, ...permissoesDoAlarme() };
 }

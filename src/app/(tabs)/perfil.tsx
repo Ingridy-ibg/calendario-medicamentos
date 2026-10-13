@@ -163,6 +163,12 @@ export default function PerfilScreen() {
     atualizarPermissoes();
   }
 
+  async function abrirSobreOutrosApps() {
+    const { solicitarPermissaoSobreOutrosApps } = await import('@/notifications');
+    await solicitarPermissaoSobreOutrosApps();
+    atualizarPermissoes();
+  }
+
   async function abrirTelaCheia() {
     const { solicitarPermissaoFullScreenIntent } = await import('@/notifications');
     await solicitarPermissaoFullScreenIntent();
@@ -239,6 +245,18 @@ export default function PerfilScreen() {
                   ativa={permissoes?.telaCheia === true}
                   rotuloAcao={permissoes?.telaCheia === null ? 'Abrir configurações' : 'Permitir'}
                   aoTocar={abrirTelaCheia}
+                />
+                <View style={{ height: 1, backgroundColor: theme.divider }} />
+                <LinhaPermissao
+                  titulo="Alarme por cima de outros apps"
+                  descricao={
+                    permissoes?.sobreOutrosApps === null
+                      ? 'Confira nas configurações do Android'
+                      : 'Sem isso, com o celular em uso o especial aparece só como aviso'
+                  }
+                  ativa={permissoes?.sobreOutrosApps === true}
+                  rotuloAcao={permissoes?.sobreOutrosApps === null ? 'Abrir configurações' : 'Permitir'}
+                  aoTocar={abrirSobreOutrosApps}
                 />
               </>
             )}

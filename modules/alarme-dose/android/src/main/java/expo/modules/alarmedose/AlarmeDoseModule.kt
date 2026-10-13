@@ -118,6 +118,7 @@ class AlarmeDoseModule : Module() {
       mapOf(
         "alarmeExato" to Alarmes.podeAgendarExato(context),
         "telaCheia" to (Build.VERSION.SDK_INT < 34 || notificacoes.canUseFullScreenIntent()),
+        "sobreOutrosApps" to Settings.canDrawOverlays(context),
       )
     }
 
@@ -127,6 +128,10 @@ class AlarmeDoseModule : Module() {
 
     Function("abrirConfigAlarmeExato") {
       if (Build.VERSION.SDK_INT >= 31) abrirConfiguracao(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+    }
+
+    Function("abrirConfigSobreOutrosApps") {
+      abrirConfiguracao(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
     }
 
     Function("consumirAberturaPeloAlarme") {

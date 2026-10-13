@@ -7,8 +7,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.app.KeyguardManager
 import android.content.pm.ServiceInfo
+import android.graphics.PixelFormat
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Handler
@@ -18,6 +21,10 @@ import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
+import android.util.Log
+import android.view.View
+import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
@@ -61,6 +68,12 @@ class AlarmeService : Service() {
       servico.handler.post { if (id == null || id == idTocando) servico.silenciarAtual() }
     }
 
+    /** A Activity do app voltou ao primeiro plano: remove a janela-ponte, se houver. */
+    fun telaExibida() {
+      val servico = instancia.get() ?: return
+      servico.handler.post { servico.removerJanelaPonte() }
+    }
+
     /** Alarme cancelado (dose confirmada): para o som, se for o que toca, e tira o aviso. */
     fun encerrar(context: Context, id: String) {
       instancia.get()?.let { servico -> servico.handler.post { if (id == idTocando) servico.encerrarAtual() } }
@@ -74,6 +87,8 @@ class AlarmeService : Service() {
   private var vibrador: Vibrator? = null
   private var wakeLock: PowerManager.WakeLock? = null
   private var inicioMs = 0L
+  private var janelaPonte: View? = null
+  private val removerPonteDepois = Runnable { removerJanelaPonte() }
 
   private val limite = Runnable { silenciarAtual() }
   private val subirVolume = object : Runnable {
@@ -123,10 +138,69 @@ class AlarmeService : Service() {
     if (config.vibrar) vibrar()
     handler.removeCallbacks(limite)
     handler.postDelayed(limite, LIMITE_MS)
+    abrirPorCimaSeEmUso(dados)
     return START_NOT_STICKY
   }
 
+  /**
+   * Celular desbloqueado e em uso: a full-screen intent só mostraria o aviso
+   * flutuante, então a tela de alarme é aberta direto, por cima do app em uso
+   * (design.md, decisão 10). Exige "Aparecer sobre outros apps". Com o
+   * celular bloqueado quem abre é a full-screen intent — abrir aqui também
+   * empilharia duas telas. Em ligação, nada por cima: fica o aviso.
+   */
+  private fun abrirPorCimaSeEmUso(dados: DadosAlarme) {
+    if (!Settings.canDrawOverlays(this) || emLigacao()) return
+    val bloqueado = getSystemService(KeyguardManager::class.java).isKeyguardLocked
+    val telaLigada = getSystemService(PowerManager::class.java).isInteractive
+    if (bloqueado || !telaLigada) return
+    // Android 15+: a permissão só libera abrir uma tela com uma janela do app visível.
+    if (Build.VERSION.SDK_INT >= 35) mostrarJanelaPonte()
+    try {
+      startActivity(Alarmes.intentAbrirApp(this, dados))
+    } catch (erro: Exception) {
+      Log.w("AlarmeDose", "Não foi possível abrir a tela de alarme por cima", erro)
+      removerJanelaPonte()
+    }
+  }
+
+  private fun emLigacao(): Boolean {
+    val modo = getSystemService(AudioManager::class.java).mode
+    return modo == AudioManager.MODE_IN_CALL || modo == AudioManager.MODE_IN_COMMUNICATION || modo == AudioManager.MODE_RINGTONE
+  }
+
+  /** Janela sobreposta transparente de 1 px, que não recebe toque, só enquanto a tela de alarme abre. */
+  private fun mostrarJanelaPonte() {
+    if (janelaPonte != null) return
+    val parametros = WindowManager.LayoutParams(
+      1,
+      1,
+      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+      PixelFormat.TRANSLUCENT,
+    )
+    try {
+      val vista = View(this)
+      getSystemService(WindowManager::class.java).addView(vista, parametros)
+      janelaPonte = vista
+      handler.postDelayed(removerPonteDepois, 5_000)
+    } catch (erro: Exception) {
+      Log.w("AlarmeDose", "Não foi possível mostrar a janela-ponte", erro)
+    }
+  }
+
+  private fun removerJanelaPonte() {
+    handler.removeCallbacks(removerPonteDepois)
+    val vista = janelaPonte ?: return
+    janelaPonte = null
+    try {
+      getSystemService(WindowManager::class.java).removeView(vista)
+    } catch (_: Exception) {
+    }
+  }
+
   override fun onDestroy() {
+    removerJanelaPonte()
     pararSomEVibracao()
     idTocando = null
     atual = null

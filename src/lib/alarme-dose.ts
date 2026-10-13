@@ -24,6 +24,7 @@ export const alarmeDisponivel = nativo != null;
 export interface PermissoesAlarmeOuDesconhecidas {
   alarmeExato: boolean | null;
   telaCheia: boolean | null;
+  sobreOutrosApps: boolean | null;
 }
 
 export function agendarAlarme(id: string, data: Date, dados: DadosAgendamento): void {
@@ -64,7 +65,7 @@ export async function escolherToqueDoAparelho(atual: string | null): Promise<Toq
 }
 
 export function permissoesDoAlarme(): PermissoesAlarmeOuDesconhecidas {
-  return nativo?.permissoes() ?? { alarmeExato: null, telaCheia: null };
+  return nativo?.permissoes() ?? { alarmeExato: null, telaCheia: null, sobreOutrosApps: null };
 }
 
 export function abrirConfigTelaCheia(): void {
@@ -73,6 +74,11 @@ export function abrirConfigTelaCheia(): void {
 
 export function abrirConfigAlarmeExato(): void {
   nativo?.abrirConfigAlarmeExato();
+}
+
+/** "Aparecer sobre outros apps": deixa o alarme abrir a tela por cima do app em uso. */
+export function abrirConfigSobreOutrosApps(): void {
+  nativo?.abrirConfigSobreOutrosApps();
 }
 
 /** Diz se a abertura atual veio de um alarme, e limpa a marca. Sempre `false` fora do Android nativo. */

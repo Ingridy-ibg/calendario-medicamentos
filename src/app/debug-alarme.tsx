@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
 import {
   abrirConfigAlarmeExato,
+  abrirConfigSobreOutrosApps,
   abrirConfigTelaCheia,
   agendarAlarme,
   alarmeDisponivel,
@@ -55,6 +56,7 @@ export default function DebugAlarmeScreen() {
             <>
               <ThemedText>Alarme exato: {permissoes.alarmeExato ? 'permitido' : 'NÃO permitido'}</ThemedText>
               <ThemedText>Tela cheia: {permissoes.telaCheia ? 'permitida' : 'NÃO permitida'}</ThemedText>
+              <ThemedText>Sobre outros apps: {permissoes.sobreOutrosApps ? 'permitida' : 'NÃO permitida'}</ThemedText>
               {aviso ? <ThemedText themeColor="textSecondary">{aviso}</ThemedText> : null}
               <View style={{ gap: 10 }}>
                 <Botao rotulo="Alarme A em 15 segundos" onPress={() => agendarEm('teste-a', 15)} />
@@ -75,6 +77,7 @@ export default function DebugAlarmeScreen() {
                 />
                 <Botao rotulo="Config. tela cheia" variante="secundario" onPress={() => abrirConfigTelaCheia()} />
                 <Botao rotulo="Config. alarme exato" variante="secundario" onPress={() => abrirConfigAlarmeExato()} />
+                <Botao rotulo="Config. sobre outros apps" variante="secundario" onPress={() => abrirConfigSobreOutrosApps()} />
                 <Botao rotulo="Sair de cima do bloqueio" variante="secundario" onPress={() => exibirSobreBloqueio(false)} />
               </View>
             </>

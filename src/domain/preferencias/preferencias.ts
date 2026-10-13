@@ -56,3 +56,14 @@ export function lerDataGuardada(valor: string | null): Date | null {
 export function devePedirTelaCheia(criticidade: 'comum' | 'especial', valorGuardado: string | null): boolean {
   return criticidade === 'especial' && valorGuardado !== '1';
 }
+
+export type PermissaoDoAlarme = 'telaCheia' | 'sobreOutrosApps';
+
+/**
+ * Configurações do Android a abrir no primeiro cadastro de um especial, nesta
+ * ordem e só as que faltam (alarme-tela-cheia, design.md, decisão 10). `null`
+ * (estado desconhecido) não é pedido: fora do app nativo não há o que abrir.
+ */
+export function permissoesDoAlarmeAPedir(situacao: Record<PermissaoDoAlarme, boolean | null>): PermissaoDoAlarme[] {
+  return (['telaCheia', 'sobreOutrosApps'] as const).filter((permissao) => situacao[permissao] === false);
+}

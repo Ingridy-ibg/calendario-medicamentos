@@ -32,6 +32,11 @@ internal object AlarmeActivityListener : ReactActivityLifecycleListener {
     aplicar(activity, activity?.intent)
   }
 
+  override fun onResume(activity: Activity?) {
+    // A tela abriu: a janela-ponte do Android 15+ já pode sair.
+    AlarmeService.telaExibida()
+  }
+
   override fun onNewIntent(intent: Intent?): Boolean {
     aplicar(activity.get(), intent)
     return false

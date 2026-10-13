@@ -3,6 +3,7 @@ import { NativeModule, requireOptionalNativeModule } from 'expo';
 export interface PermissoesAlarme {
   alarmeExato: boolean;
   telaCheia: boolean;
+  sobreOutrosApps: boolean;
 }
 
 export interface DadosAgendamento {
@@ -42,6 +43,7 @@ declare class AlarmeDoseModule extends NativeModule {
   permissoes(): PermissoesAlarme;
   abrirConfigTelaCheia(): void;
   abrirConfigAlarmeExato(): void;
+  abrirConfigSobreOutrosApps(): void;
   consumirAberturaPeloAlarme(): boolean;
   exibirSobreBloqueio(ativo: boolean): void;
 }

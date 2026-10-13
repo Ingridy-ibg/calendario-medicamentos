@@ -5,6 +5,8 @@ export {
   solicitarPermissaoAlarmeExato,
   solicitarPermissaoFullScreenIntent,
   solicitarPermissaoPostNotifications,
+  solicitarPermissaoSobreOutrosApps,
+  solicitarPermissoesDoAlarme,
   solicitarPermissoesEssenciais,
 } from './permissoes';
 export { reconciliarNotificacoes } from './reconciliador';
