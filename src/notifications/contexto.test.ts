@@ -5,6 +5,7 @@ import { inserirDose, listarDosesPorEsquema, reagendarProximaNotificacao } from 
 import { buscarEsquemaPorId, inserirEsquema, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { atualizarMedicamento, inserirMedicamento } from '@/db/repositories/medicamentos';
 import { materializarJanela } from '@/domain/dose-scheduling/janela-rolante';
+import { editarEsquema } from '@/domain/medication-registration/registration';
 import { identificadorDose, identificadorPausaCiclo } from '@/domain/dose-notifications/reconciliador';
 
 import { buscarContextoDaDose, listarAlvosDesejados } from './contexto';
@@ -155,5 +156,16 @@ describe('listarAlvosDesejados — dose de início de cartela (inicio-de-cartela
     const [inicio] = ciclicoAguardando(false);
     expect(inicio).toBeDefined();
     expect(listarAlvosDesejados(db, new Date(2026, 9, 27, 10))).toEqual([]);
+  });
+
+  it('depois de editar o horário com o início pendente, deseja um único alvo de início (fix-revisao-inicio-de-cartela)', () => {
+    const [inicio] = ciclicoAguardando(true);
+    expect(inicio).toBeDefined();
+    const esquemaId = inicio.esquemaId;
+    editarEsquema(db, esquemaId, { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '23:00' }, new Date(2026, 9, 29, 22, 30));
+
+    const alvos = listarAlvosDesejados(db, new Date(2026, 9, 29, 22, 30)).filter((a) => a.tipo === 'dose');
+    expect(alvos).toHaveLength(1);
+    expect(alvos[0]).toMatchObject({ agendador: 'alarme', dataHora: new Date(2026, 9, 29, 23, 0) });
   });
 });

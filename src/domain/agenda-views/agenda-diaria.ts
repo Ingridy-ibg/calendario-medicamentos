@@ -1,11 +1,11 @@
-import { addDays, addMinutes, format, isSameDay, startOfDay } from 'date-fns';
+import { addDays, format, isSameDay, startOfDay } from 'date-fns';
 
 import { contarDosesRegistradasNoIntervalo, listarDosesDoIntervalo, STATUS_NAO_RESOLVIDOS } from '@/db/repositories/doses';
 import { listarEsquemasAtivos, listarEsquemasNaoRemovidos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import type { StatusDose } from '@/db/schema';
-import { estaAtrasada, TOLERANCIA_ATRASO_MIN } from '@/domain/adherence-history/classificacao';
+import { estaAtrasada } from '@/domain/adherence-history/classificacao';
 import { calcularStatusDoDia, ehInicioDeCartelaPendente, inicioPrevistoDaCartela } from '@/domain/dose-scheduling/ciclico';
 import { combinarDataEHorario } from '@/domain/dose-scheduling/horario';
 import { type AlertaEstoque, alertaVisivelNaLista } from '@/domain/medication-stock/alerta';
@@ -67,14 +67,24 @@ export interface ItemAgendaAguardandoCartela {
 }
 
 /**
+ * O início da nova cartela está atrasado: a mesma regra das doses
+ * (`estaAtrasada`, mais de 30 min depois do horário). Avaliado com o `agora`
+ * de quem exibe, para valer também com a agenda já aberta
+ * (fix-revisao-inicio-de-cartela).
+ */
+export function inicioAtrasado(inicioPrevisto: Date | null, agora: Date): boolean {
+  return inicioPrevisto !== null && estaAtrasada({ dataHoraPrevista: inicioPrevisto, status: 'pendente' }, agora);
+}
+
+/**
  * Quando começa a nova cartela, para a agenda (specs/agenda-views): "hoje às
  * 22:00", "amanhã às 22:00", "atrasada desde 29/10" ou, mais adiante,
  * "em 05/11 às 22:00". `null` quando não há início definido.
  */
-export function textoInicioPrevisto(item: Pick<ItemAgendaAguardandoCartela, 'inicioPrevisto' | 'atrasada'>, agora: Date): string | null {
+export function textoInicioPrevisto(item: Pick<ItemAgendaAguardandoCartela, 'inicioPrevisto'>, agora: Date): string | null {
   const { inicioPrevisto } = item;
   if (!inicioPrevisto) return null;
-  if (item.atrasada) return `atrasada desde ${format(inicioPrevisto, 'dd/MM')}`;
+  if (inicioAtrasado(inicioPrevisto, agora)) return `atrasada desde ${format(inicioPrevisto, 'dd/MM')}`;
   const horario = format(inicioPrevisto, 'HH:mm');
   if (isSameDay(inicioPrevisto, agora)) return `hoje às ${horario}`;
   if (isSameDay(inicioPrevisto, addDays(agora, 1))) return `amanhã às ${horario}`;
@@ -184,7 +194,7 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
           dosagem: medicamento.dosagem,
           horario: horario ? combinarDataEHorario(inicioDoDia, horario) : null,
           inicioPrevisto,
-          atrasada: inicioPrevisto !== null && hoje > addMinutes(inicioPrevisto, TOLERANCIA_ATRASO_MIN),
+          atrasada: inicioAtrasado(inicioPrevisto, hoje),
           inicioHoje: inicioPrevisto !== null && isSameDay(inicioPrevisto, hoje),
           alertaEstoque: alertaDe(linha, medicamento),
         },

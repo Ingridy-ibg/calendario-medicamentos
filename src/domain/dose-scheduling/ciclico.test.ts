@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calcularStatusDoDia,
   confirmarPrimeiraDoseCiclo,
+  doseDeInicioFaltante,
   ehInicioDeCartelaPendente,
   gerarDoseDeInicioDeCartela,
   gerarDosesCiclico,
@@ -269,5 +270,34 @@ describe('projetarCiclos', () => {
 
     expect(dias.map((d) => d.fase)).toEqual(['inicio-cartela', 'ativo']);
     expect(dias[0].dia).toEqual(new Date(2026, 9, 14));
+  });
+});
+
+describe('doseDeInicioFaltante (fix-revisao-inicio-de-cartela)', () => {
+  // Ciclo de 01/08 às 22:00: pausa até 28/08, início previsto em 29/08 às 22:00.
+  const esquema = criarEsquema({ horarios: ['22:00'], dataInicioCiclo: new Date(2026, 7, 1, 22, 0) });
+
+  it('início vencido sem dose: devolve a dose no dia e horário previstos', () => {
+    expect(doseDeInicioFaltante(esquema, [], new Date(2026, 9, 13, 10))).toEqual({
+      dataHoraPrevista: new Date(2026, 7, 29, 22, 0),
+      numeroNoCiclo: 1,
+    });
+  });
+
+  it('início de hoje, mesmo antes do horário, também conta', () => {
+    expect(doseDeInicioFaltante(esquema, [], new Date(2026, 7, 29, 9))).not.toBeNull();
+  });
+
+  it('já existe dose de dia 1 no dia, em qualquer horário ou status: nada a criar', () => {
+    const doses = [{ numeroNoCiclo: 1, dataHoraPrevista: new Date(2026, 7, 29, 21, 0) }];
+    expect(doseDeInicioFaltante(esquema, doses, new Date(2026, 9, 13, 10))).toBeNull();
+  });
+
+  it('início ainda no futuro: nada a criar', () => {
+    expect(doseDeInicioFaltante(esquema, [], new Date(2026, 7, 20, 10))).toBeNull();
+  });
+
+  it('sem ciclo nem início previsto: nada a criar', () => {
+    expect(doseDeInicioFaltante(criarEsquema({ dataInicioCiclo: null }), [], new Date(2026, 9, 13))).toBeNull();
   });
 });

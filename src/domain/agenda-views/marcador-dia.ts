@@ -36,7 +36,11 @@ export function marcadorDoDia(itens: ItemDiaCalendario[]): MarcadorDia | null {
   for (const { status, token } of ORDEM) {
     if (historico.some((item) => item.status === status)) return { token, estilo: 'cheio' };
   }
-  if (itens.some((item) => item.tipo === 'inicio-cartela')) return { token: 'accent', estilo: 'anel' };
+  // Início de cartela: projetado num dia futuro, ou a dose de hoje ainda por vir (fix-revisao-inicio-de-cartela).
+  const inicioDeHojePendente = historico.some(
+    (item) => item.inicioDeCartela && (item.status === 'pendente' || item.status === 'aguardando'),
+  );
+  if (inicioDeHojePendente || itens.some((item) => item.tipo === 'inicio-cartela')) return { token: 'accent', estilo: 'anel' };
   const aguardando = historico.some((item) => item.status === 'pendente' || item.status === 'aguardando');
   if (aguardando || itens.some((item) => item.tipo === 'previsto')) return { token: 'accent', estilo: 'contorno' };
   if (itens.some((item) => item.tipo === 'pausa-ciclo')) return { token: 'statusNeutro', estilo: 'contorno' };

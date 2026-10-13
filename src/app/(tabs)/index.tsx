@@ -23,6 +23,7 @@ import {
   type ItemAgendaAguardandoCartela,
   type ItemAgendaDose,
   type ItemAgendaSeNecessario,
+  inicioAtrasado,
   montarAgendaDoDia,
   textoInicioPrevisto,
 } from '@/domain/agenda-views/agenda-diaria';
@@ -180,9 +181,11 @@ function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque:
  * Cíclico sem ciclo em andamento: o usuário inicia a cartela daqui, o que
  * registra o primeiro comprimido como tomado agora (fix-cyclic-and-rolling-window).
  */
-function ItemAguardandoCartela({ item, aoMudar }: { item: ItemAgendaAguardandoCartela; aoMudar: () => void }) {
+function ItemAguardandoCartela({ item, agora, aoMudar }: { item: ItemAgendaAguardandoCartela; agora: Date; aoMudar: () => void }) {
   const theme = useTheme();
-  const inicio = textoInicioPrevisto(item, new Date());
+  // Com o `agora` do relógio da tela: o atraso aparece sem precisar recarregar (fix-revisao-inicio-de-cartela).
+  const inicio = textoInicioPrevisto(item, agora);
+  const atrasada = inicioAtrasado(item.inicioPrevisto, agora);
 
   async function comecarCartela() {
     confirmarNovaCartelaCiclica(db, esquemaDominioOuFalha(item.esquemaId) as EsquemaCiclico, new Date());
@@ -205,8 +208,8 @@ function ItemAguardandoCartela({ item, aoMudar }: { item: ItemAgendaAguardandoCa
           </ThemedText>
           {inicio ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {item.atrasada ? <Icone nome="alerta" cor={theme.statusAtraso} tamanho={14} /> : null}
-              <ThemedText type="small" numerico style={{ color: item.atrasada ? theme.statusAtraso : theme.textSecondary }}>
+              {atrasada ? <Icone nome="alerta" cor={theme.statusAtraso} tamanho={14} /> : null}
+              <ThemedText type="small" numerico style={{ color: atrasada ? theme.statusAtraso : theme.textSecondary }}>
                 Nova cartela {inicio}
               </ThemedText>
             </View>
@@ -301,6 +304,16 @@ export default function AgendaDoDiaScreen() {
 
   useFocusEffect(recarregar);
 
+  // Relógio de 1 minuto enquanto a agenda está em foco: redesenha o início de cartela que passa a atrasado.
+  const [agora, setAgora] = useState(() => new Date());
+  useFocusEffect(
+    useCallback(() => {
+      setAgora(new Date());
+      const relogio = setInterval(() => setAgora(new Date()), 60_000);
+      return () => clearInterval(relogio);
+    }, []),
+  );
+
   const resumo = useMemo(() => resumirDia(itens), [itens]);
   const secoes = useMemo(() => agruparPorPeriodo(itens), [itens]);
 
@@ -346,7 +359,7 @@ export default function AgendaDoDiaScreen() {
                   ? secao.itens.map((item) => <ItemSeNecessario key={item.esquemaId} item={item} aoMudar={recarregar} />)
                   : secao.itens.map((item) =>
                       item.tipo === 'aguardando_cartela' ? (
-                        <ItemAguardandoCartela key={item.esquemaId} item={item} aoMudar={recarregar} />
+                        <ItemAguardandoCartela key={item.esquemaId} item={item} agora={agora} aoMudar={recarregar} />
                       ) : (
                         <ItemDose
                           key={item.doseId}

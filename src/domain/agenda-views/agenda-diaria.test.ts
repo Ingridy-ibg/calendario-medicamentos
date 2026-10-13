@@ -10,7 +10,7 @@ import { confirmarNovaCartelaCiclica } from '@/domain/dose-scheduling/resolucao'
 import { cadastrarMedicamento } from '@/domain/medication-registration/registration';
 import type { EsquemaCiclico, EsquemaDiario } from '@/domain/dose-scheduling/types';
 
-import { montarAgendaDoDia, textoInicioPrevisto } from './agenda-diaria';
+import { inicioAtrasado, montarAgendaDoDia, textoInicioPrevisto } from './agenda-diaria';
 import { agruparPorPeriodo, resumirDia } from './resumo-dia';
 
 const HOJE = new Date(2026, 7, 26, 7, 0); // 26/08/2026, quarta-feira
@@ -350,10 +350,17 @@ describe('montarAgendaDoDia — alertas de estoque por tipo de uso', () => {
 describe('textoInicioPrevisto (inicio-de-cartela)', () => {
   const agora = new Date(2026, 9, 31, 15, 0);
   it('hoje, amanhã, mais adiante e atrasada', () => {
-    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 9, 31, 22, 0), atrasada: false }, agora)).toBe('hoje às 22:00');
-    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 10, 1, 22, 0), atrasada: false }, agora)).toBe('amanhã às 22:00');
-    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 10, 5, 22, 0), atrasada: false }, agora)).toBe('em 05/11 às 22:00');
-    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 9, 29, 22, 0), atrasada: true }, agora)).toBe('atrasada desde 29/10');
-    expect(textoInicioPrevisto({ inicioPrevisto: null, atrasada: false }, agora)).toBeNull();
+    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 9, 31, 22, 0) }, agora)).toBe('hoje às 22:00');
+    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 10, 1, 22, 0) }, agora)).toBe('amanhã às 22:00');
+    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 10, 5, 22, 0) }, agora)).toBe('em 05/11 às 22:00');
+    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 9, 29, 22, 0) }, agora)).toBe('atrasada desde 29/10');
+    expect(textoInicioPrevisto({ inicioPrevisto: null }, agora)).toBeNull();
+  });
+
+  it('passa a "atrasada" com o horário da exibição: às 22:20 ainda não, às 22:40 sim (fix-revisao-inicio-de-cartela)', () => {
+    const item = { inicioPrevisto: new Date(2026, 9, 31, 22, 0) };
+    expect(textoInicioPrevisto(item, new Date(2026, 9, 31, 22, 20))).toBe('hoje às 22:00');
+    expect(textoInicioPrevisto(item, new Date(2026, 9, 31, 22, 40))).toBe('atrasada desde 31/10');
+    expect(inicioAtrasado(item.inicioPrevisto, new Date(2026, 9, 31, 22, 40))).toBe(true);
   });
 });

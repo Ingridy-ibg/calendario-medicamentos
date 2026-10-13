@@ -261,8 +261,10 @@ export default function ConfirmarCadastroScreen() {
       return;
     }
 
-    // Só cadastrar descarta "Já estava tomando" — então nem o valida (fix-agenda-membership-review).
-    const novaPrevia = recalcular(() => prepararCadastro(adicionarNaAgenda ? dados! : { ...dados!, emUso: undefined }, agoraConfirmacao));
+    // Só cadastrar descarta "Já estava tomando" e a resposta do 1º comprimido — então nem os valida.
+    const novaPrevia = recalcular(() =>
+      prepararCadastro(adicionarNaAgenda ? dados! : { ...dados!, emUso: undefined, inicioCartela: undefined }, agoraConfirmacao),
+    );
     if (!novaPrevia) return;
     if (adicionarNaAgenda && faltaEscolherInicio(novaPrevia)) return;
     if (adicionarNaAgenda && assinatura(novaPrevia) !== assinatura(previa!)) {

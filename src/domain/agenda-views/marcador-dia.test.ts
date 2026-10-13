@@ -59,4 +59,10 @@ describe('marcadorDoDia', () => {
     expect(marcadorDoDia([historico('tomada'), inicioCartela])).toEqual({ token: 'statusTomada', estilo: 'cheio' });
     expect(marcadorDoDia([historico('pendente', true), inicioCartela])).toEqual({ token: 'statusAtraso', estilo: 'contorno' });
   });
+
+  it('hoje com a dose de início ainda por vir: marca de nova cartela; já atrasada: contorno âmbar', () => {
+    const inicioHoje = (atrasada: boolean): ItemDiaCalendario => ({ ...historico('pendente', atrasada), inicioDeCartela: true } as ItemDiaCalendario);
+    expect(marcadorDoDia([inicioHoje(false)])).toEqual({ token: 'accent', estilo: 'anel' });
+    expect(marcadorDoDia([inicioHoje(true)])).toEqual({ token: 'statusAtraso', estilo: 'contorno' });
+  });
 });

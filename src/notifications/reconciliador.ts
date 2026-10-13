@@ -1,3 +1,6 @@
+import { dismissNotificationAsync, getPresentedNotificationsAsync } from 'expo-notifications';
+
+import { buscarDosePorId } from '@/db/repositories/doses';
 import type { AppDb } from '@/db/repositories/types';
 import { analisarIdentificador, planejarReconciliacao } from '@/domain/dose-notifications/reconciliador';
 import { aplicarDisparosDeAlarme, fecharDosesVencidas } from '@/domain/dose-notifications/resolucao-por-notificacao';
@@ -45,5 +48,24 @@ export async function reconciliarNotificacoes(db: AppDb, agora: Date = new Date(
   }
   for (const alvo of plano.agendar) {
     await agendarAlvo(db, alvo);
+  }
+  await removerNotificacoesDeDosesResolvidas(db);
+}
+
+/**
+ * Tira da bandeja as notificações de dose já resolvida ou removida — por
+ * exemplo, confirmada na agenda depois da 4ª notificação de uma comum, que
+ * não tem mais reenvio agendado para o reconciliador cancelar
+ * (fix-revisao-inicio-de-cartela, decisão 8). A de uma dose ainda aberta fica.
+ */
+async function removerNotificacoesDeDosesResolvidas(db: AppDb): Promise<void> {
+  for (const exibida of await getPresentedNotificationsAsync()) {
+    const { identifier } = exibida.request;
+    const analisado = analisarIdentificador(identifier);
+    if (analisado?.tipo !== 'dose') continue;
+    const dose = buscarDosePorId(db, analisado.doseId);
+    if (!dose || (dose.status !== 'pendente' && dose.status !== 'aguardando')) {
+      await dismissNotificationAsync(identifier);
+    }
   }
 }

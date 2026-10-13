@@ -1,6 +1,7 @@
 import * as BackgroundTask from 'expo-background-task';
 import {
   DEFAULT_ACTION_IDENTIFIER,
+  dismissNotificationAsync,
   type NotificationResponse,
   type NotificationTaskPayload,
   registerTaskAsync as registerBackgroundNotificationTaskAsync,
@@ -20,6 +21,7 @@ import {
   registrarResposta,
 } from '@/domain/dose-notifications/respostas-processadas';
 import type { AcaoNotificacao } from '@/domain/dose-notifications/types';
+import { aplicarCorrecoesUnicas } from '@/lib/correcoes-unicas';
 import { useDadosStore } from '@/state/dados-store';
 
 import { agendarAlvo, cancelarAlvo } from './agendamento';
@@ -90,6 +92,8 @@ export async function processarResposta(response: NotificationResponse): Promise
   if (resultado.tipo === 'resolvida') {
     await cancelarAlvo(identifier);
   } else if (resultado.tipo === 'adiada') {
+    // A notificação sai da bandeja e volta em 30 min (fix-revisao-inicio-de-cartela).
+    await dismissNotificationAsync(identifier);
     await agendarAlvo(db, {
       identifier,
       tipo: 'dose',
@@ -158,6 +162,7 @@ if (!TaskManager.isTaskDefined(TAREFA_RECONCILIACAO_PERIODICA)) {
     const agora = new Date();
     // Antes de reconciliar: garante doses à frente mesmo se o app não for
     // aberto por semanas (fix-cyclic-and-rolling-window).
+    aplicarCorrecoesUnicas(db, agora);
     renovarJanelasAtivas(db, agora);
     marcarPerdidasPorTempo(db, agora);
     await reconciliarNotificacoes(db, agora);

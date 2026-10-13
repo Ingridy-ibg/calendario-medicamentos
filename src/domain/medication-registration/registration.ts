@@ -185,12 +185,15 @@ export interface OpcoesCadastro {
 }
 
 export function cadastrarMedicamento(db: AppDb, dadosInformados: DadosFormularioMedicamento, agora: Date, { naAgenda = true }: OpcoesCadastro = {}) {
-  const dados = naAgenda ? dadosInformados : { ...dadosInformados, emUso: undefined };
+  // Só cadastrar: sem "Já estava tomando" nem resposta do 1º comprimido (fix-revisao-inicio-de-cartela).
+  const dados = naAgenda ? dadosInformados : { ...dadosInformados, emUso: undefined, inicioCartela: undefined };
   prepararCadastro(dados, agora);
 
   // A mesma prévia que a tela de confirmação mostra decide o que é gravado.
   const previa = montarPreviaCadastro(dados, agora);
   if (naAgenda) exigirEscolhaDoInicioDaCartela(previa);
+  // Fora da agenda o cíclico não tem ciclo nem início previsto: eles nascem na volta à agenda.
+  const plano = naAgenda ? previa.plano : { ...previa.plano, dataInicioCiclo: null, inicioCartelaPrevisto: null };
 
   // Medicamentos cíclicos são sempre especiais, independentemente do valor
   // selecionado pelo usuário no controle de criticidade.
@@ -204,7 +207,7 @@ export function cadastrarMedicamento(db: AppDb, dadosInformados: DadosFormulario
       { ...comuns, observacoes: normalizarObservacoes(comuns.observacoes), criticidade, naAgenda },
       agora,
     );
-    const esquema = inserirEsquema(tx, paraNovoEsquema(medicamento.id, dados.esquema, previa.plano), agora);
+    const esquema = inserirEsquema(tx, paraNovoEsquema(medicamento.id, dados.esquema, plano), agora);
     if (naAgenda) materializarDosesIniciais(tx, buscarEsquemaPorId(tx, esquema.id)!, previa.plano, agora);
     return { medicamento, esquema, previa };
   });

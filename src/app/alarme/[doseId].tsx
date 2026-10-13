@@ -10,7 +10,6 @@ import { Tocavel } from '@/components/ui/tocavel';
 import { PALETAS_ALARME } from '@/constants/cores';
 import { FAMILIA_TEXTO, FAMILIA_TITULO } from '@/constants/fontes';
 import { db } from '@/db/client';
-import { buscarDosePorId } from '@/db/repositories/doses';
 import { identificadorDose } from '@/domain/dose-notifications/reconciliador';
 import { aplicarRespostaDeNotificacao } from '@/domain/dose-notifications/resolucao-por-notificacao';
 import { cancelarAlarme, exibirSobreBloqueio, ID_ALARME_TESTE, silenciarAlarme } from '@/lib/alarme-dose';
@@ -38,9 +37,9 @@ const DADOS_TESTE: DadosTela = {
 
 function carregar(doseId: string): { dados: DadosTela | null; resolvida: boolean } {
   if (doseId === ID_ALARME_TESTE) return { dados: DADOS_TESTE, resolvida: false };
-  const dose = buscarDosePorId(db, doseId);
   const contexto = buscarContextoDaDose(db, doseId);
-  if (!dose || !contexto) return { dados: null, resolvida: true };
+  if (!contexto) return { dados: null, resolvida: true };
+  const { dose } = contexto;
   return {
     dados: {
       horario: dose.dataHoraPrevista ?? new Date(),

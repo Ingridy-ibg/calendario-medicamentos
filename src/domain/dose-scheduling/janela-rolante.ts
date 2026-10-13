@@ -1,6 +1,7 @@
 import { addDays, addWeeks, max, startOfDay } from 'date-fns';
 
 import {
+  apagarDoseNaoResolvida,
   inserirDose,
   listarDosesPorEsquema,
   type NovaDose,
@@ -10,11 +11,11 @@ import {
 import { definirInicioCartelaPrevisto, listarEsquemasAtivos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import type { AppDb } from '@/db/repositories/types';
 
-import { gerarDoseDeInicioDeCartela, gerarDosesCiclico } from './ciclico';
+import { doseDeInicioFaltante, ehInicioDeCartelaPendente, gerarDoseDeInicioDeCartela, gerarDosesCiclico } from './ciclico';
 import { combinarDataEHorario } from './horario';
 import { gerarDosesDiario } from './diario';
 import { gerarDosesDiasSemana } from './dias-semana';
-import type { DoseGerada, Esquema } from './types';
+import type { DoseGerada, Esquema, EsquemaCiclico } from './types';
 
 export const SEMANAS_JANELA_MINIMA = 2;
 export const SEMANAS_JANELA_MAXIMA = 4;
@@ -77,7 +78,14 @@ export function materializarJanela(
 export function rematerializarJanelaAposEdicao(db: AppDb, esquema: Esquema, agora: Date) {
   const geradas = gerarDosesParaJanela(esquema, agora, addWeeks(agora, SEMANAS_JANELA_MAXIMA));
   if (geradas === null) return [];
-  return substituirDosesAPartirDe(
+  // Cíclico: a dose de início pendente sai e volta no novo início, para nunca
+  // haver duas (fix-revisao-inicio-de-cartela, design.md, decisão 2).
+  if (esquema.tipo === 'CICLICO') {
+    for (const dose of listarDosesPorEsquema(db, esquema.id)) {
+      if (ehInicioDeCartelaPendente(esquema, dose)) apagarDoseNaoResolvida(db, dose.id);
+    }
+  }
+  const inseridas = substituirDosesAPartirDe(
     db,
     esquema.id,
     agora,
@@ -87,6 +95,26 @@ export function rematerializarJanelaAposEdicao(db: AppDb, esquema: Esquema, agor
       numeroNoCiclo: dose.numeroNoCiclo ?? null,
     })),
   );
+  // O novo início caiu antes do corte (hoje mais cedo ou dias atrás): o gerador não o insere.
+  if (esquema.tipo === 'CICLICO') garantirDoseDeInicio(db, esquema, listarDosesPorEsquema(db, esquema.id), agora);
+  return inseridas;
+}
+
+/**
+ * Cria a dose de início de cartela que falta (`doseDeInicioFaltante`), já
+ * vencida ou de hoje. Devolve quantas doses inseriu (0 ou 1).
+ */
+function garantirDoseDeInicio(
+  db: AppDb,
+  esquema: EsquemaCiclico,
+  existentes: { numeroNoCiclo: number | null; dataHoraPrevista: Date | null }[],
+  agora: Date,
+): number {
+  const faltante = doseDeInicioFaltante(esquema, existentes, agora);
+  if (!faltante) return 0;
+  const inserida = inserirDose(db, { esquemaId: esquema.id, dataHoraPrevista: faltante.dataHoraPrevista, numeroNoCiclo: 1 });
+  existentes.push(inserida);
+  return 1;
 }
 
 /**
@@ -102,12 +130,14 @@ export function rematerializarJanelaAposEdicao(db: AppDb, esquema: Esquema, agor
  */
 export function renovarJanela(db: AppDb, esquema: Esquema, agora: Date): number {
   const existentes = listarDosesPorEsquema(db, esquema.id).filter((dose) => dose.dataHoraPrevista !== null);
+  // Início de cartela que caiu antes da janela (fix-revisao-inicio-de-cartela).
+  const inicioFaltante = esquema.tipo === 'CICLICO' ? garantirDoseDeInicio(db, esquema, existentes, agora) : 0;
   const ultimaPrevista = existentes.reduce<Date | null>(
     (maior, dose) => (maior === null || dose.dataHoraPrevista! > maior ? dose.dataHoraPrevista! : maior),
     null,
   );
   if (ultimaPrevista && ultimaPrevista >= addWeeks(agora, SEMANAS_JANELA_MINIMA)) {
-    return 0;
+    return inicioFaltante;
   }
 
   const inicio = ultimaPrevista ? max([addDays(startOfDay(ultimaPrevista), 1), startOfDay(agora)]) : startOfDay(agora);
@@ -115,7 +145,7 @@ export function renovarJanela(db: AppDb, esquema: Esquema, agora: Date): number 
   if (!geradas) return 0;
 
   const jaExiste = new Set(existentes.map((dose) => dose.dataHoraPrevista!.getTime()));
-  let inseridas = 0;
+  let inseridas = inicioFaltante;
   for (const dose of geradas) {
     if (jaExiste.has(dose.dataHoraPrevista.getTime())) continue;
     inserirDose(db, { esquemaId: esquema.id, dataHoraPrevista: dose.dataHoraPrevista, numeroNoCiclo: dose.numeroNoCiclo ?? null });
@@ -142,6 +172,5 @@ export function definirInicioDosCiclicosSemData(db: AppDb, agora: Date) {
 
 /** Renova a janela de todo esquema ativo — na abertura do app, na volta ao primeiro plano e na tarefa periódica. */
 export function renovarJanelasAtivas(db: AppDb, agora: Date = new Date()): number {
-  definirInicioDosCiclicosSemData(db, agora);
   return listarEsquemasAtivos(db).reduce((total, linha) => total + renovarJanela(db, paraEsquemaDominio(linha), agora), 0);
 }

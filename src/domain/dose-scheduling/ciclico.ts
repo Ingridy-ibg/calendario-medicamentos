@@ -1,4 +1,4 @@
-import { addDays, differenceInCalendarDays, startOfDay } from 'date-fns';
+import { addDays, differenceInCalendarDays, isSameDay, startOfDay } from 'date-fns';
 
 import { combinarDataEHorario } from './horario';
 import type { DoseGerada, EsquemaCiclico } from './types';
@@ -124,6 +124,27 @@ export function ehInicioDeCartelaPendente(esquema: EsquemaCiclico, dose: DoseDoC
     dose.dataHoraPrevista !== null &&
     calcularStatusDoDia(esquema, dose.dataHoraPrevista).fase === 'em_espera'
   );
+}
+
+/**
+ * A dose de início de cartela que deveria existir e não existe
+ * (fix-revisao-inicio-de-cartela): o início previsto já chegou (pelo dia) e
+ * não há nenhuma dose de dia 1 nesse dia, em qualquer status. Cobre o início
+ * que caiu antes da janela rolante — ciclo terminado antes da atualização, ou
+ * app fechado por semanas —, que `gerarDoseDeInicioDeCartela` nunca gera.
+ */
+export function doseDeInicioFaltante(
+  esquema: EsquemaCiclico,
+  doses: Pick<DoseDoCiclo, 'numeroNoCiclo' | 'dataHoraPrevista'>[],
+  agora: Date,
+): DoseGerada | null {
+  const inicio = inicioPrevistoDaCartela(esquema);
+  if (!inicio || startOfDay(inicio) > startOfDay(agora)) return null;
+  if (calcularStatusDoDia(esquema, inicio).fase !== 'em_espera') return null;
+  const jaExiste = doses.some(
+    (dose) => dose.numeroNoCiclo === 1 && dose.dataHoraPrevista !== null && isSameDay(dose.dataHoraPrevista, inicio),
+  );
+  return jaExiste ? null : { dataHoraPrevista: inicio, numeroNoCiclo: 1 };
 }
 
 export type DiaProjetadoCiclico =

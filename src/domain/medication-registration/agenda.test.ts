@@ -380,3 +380,29 @@ describe('volta à agenda de um cíclico (inicio-de-cartela, 6.2)', () => {
     expect(listarDosesPorEsquema(db, esquema.id)).toMatchObject([{ dataHoraPrevista: as(13, 22), numeroNoCiclo: 1 }]);
   });
 });
+
+describe('"Só cadastrar" de um cíclico (fix-revisao-inicio-de-cartela)', () => {
+  const ciclico: DadosFormularioMedicamento = {
+    comuns: { ...comuns, nome: 'Anticoncepcional', criticidade: 'especial', quantidadeEmEstoque: 28, quantidadePorEmbalagem: 28 },
+    esquema: { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '22:00' },
+  };
+
+  it('respondeu "Já tomei hoje" e escolheu só cadastrar: fora da agenda, sem ciclo, sem início e sem doses', () => {
+    const db = createTestDb();
+    const { esquema } = cadastrarMedicamento(db, { ...ciclico, inicioCartela: 'ja_tomei' }, as(12, 23), { naAgenda: false });
+    expect(buscarEsquemaPorId(db, esquema.id)).toMatchObject({ dataInicioCiclo: null, inicioCartelaPrevisto: null });
+    expect(listarDosesPorEsquema(db, esquema.id)).toEqual([]);
+  });
+
+  it('com o horário ainda por vir, só cadastrar também não grava início previsto', () => {
+    const db = createTestDb();
+    const { esquema } = cadastrarMedicamento(db, ciclico, as(12, 15), { naAgenda: false });
+    expect(buscarEsquemaPorId(db, esquema.id)?.inicioCartelaPrevisto).toBeNull();
+  });
+
+  it('volta à agenda depois: "Nova cartela: hoje às 22:00", como um cíclico cadastrado agora', () => {
+    const db = createTestDb();
+    const { medicamento } = cadastrarMedicamento(db, { ...ciclico, inicioCartela: 'ja_tomei' }, as(12, 23), { naAgenda: false });
+    expect(prepararVoltaAAgenda(db, medicamento.id, as(14, 15)).previa.novaCartela).toMatchObject({ pergunta: false, inicio: as(14, 22) });
+  });
+});

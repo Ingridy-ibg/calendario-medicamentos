@@ -2,6 +2,7 @@ import { addDays } from 'date-fns';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTestDb, type TestDb } from '@/db/create-test-db';
+import { esquemas } from '@/db/schema';
 import { listarDosesPorEsquema, resolverDose } from '@/db/repositories/doses';
 import { buscarEsquemaPorId, inserirEsquema, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { inserirMedicamento } from '@/db/repositories/medicamentos';
@@ -269,16 +270,17 @@ describe('dose de início de cartela na janela (inicio-de-cartela)', () => {
     expect(previstas(esquema().id)).toEqual([{ em: new Date(2026, 9, 14, 22, 0), numero: 1 }]);
   });
 
-  it('início vencido sobrevive à renovação e à edição, sem gerar outro', () => {
+  it('início vencido sobrevive à renovação e, na edição, vira uma só dose no novo horário do mesmo dia', () => {
     const esquema = cicloDe(null, new Date(2026, 9, 14));
     materializarJanela(db, esquema(), new Date(2026, 9, 13, 23));
     const [inicio] = listarDosesPorEsquema(db, esquema().id);
     const doisDiasDepois = new Date(2026, 9, 16, 10);
 
     renovarJanela(db, esquema(), doisDiasDepois);
-    editarEsquema(db, esquema().id, { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '21:00' }, doisDiasDepois);
-
     expect(listarDosesPorEsquema(db, esquema().id).map((dose) => dose.id)).toEqual([inicio.id]);
+
+    editarEsquema(db, esquema().id, { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '21:00' }, doisDiasDepois);
+    expect(previstas(esquema().id)).toEqual([{ em: new Date(2026, 9, 14, 21, 0), numero: 1 }]);
   });
 
   it('horário editado durante a espera move a dose de início no mesmo dia', () => {
@@ -308,5 +310,77 @@ describe('dose de início de cartela na janela (inicio-de-cartela)', () => {
 
     expect(buscarEsquemaPorId(db, antesDoHorario().id)?.inicioCartelaPrevisto).toEqual(new Date(2026, 9, 13));
     expect(buscarEsquemaPorId(db, depoisDoHorario)?.inicioCartelaPrevisto).toEqual(new Date(2026, 9, 14));
+  });
+
+  it('a renovação da janela não faz mais a correção (roda uma vez só, fora daqui)', () => {
+    const semData = cicloDe(null);
+    renovarJanelasAtivas(db, new Date(2026, 9, 13, 15, 0));
+    expect(buscarEsquemaPorId(db, semData().id)?.inicioCartelaPrevisto).toBeNull();
+  });
+});
+
+describe('dose de início vencida (fix-revisao-inicio-de-cartela)', () => {
+  let db: TestDb;
+  let esquemaId: string;
+  beforeEach(() => {
+    db = createTestDb();
+    const medicamentoId = inserirMedicamento(db, {
+      nome: 'Anticoncepcional',
+      dosagem: '1 comprimido',
+      criticidade: 'especial',
+      quantidadeEmEstoque: 28,
+      quantidadePorEmbalagem: 28,
+    }).id;
+    // Dia 1 em 01/08 às 22:00: pausa até 28/08, nova cartela prevista em 29/08 às 22:00.
+    esquemaId = inserirEsquema(db, {
+      tipo: 'CICLICO',
+      medicamentoId,
+      horarios: ['22:00'],
+      diasAtivos: 21,
+      diasPausa: 7,
+      dataInicioCiclo: new Date(2026, 7, 1, 22, 0),
+    }).id;
+  });
+  const esquema = () => paraEsquemaDominio(buscarEsquemaPorId(db, esquemaId)!);
+  const iniciosPendentes = () =>
+    listarDosesPorEsquema(db, esquemaId).filter((d) => d.numeroNoCiclo === 1 && d.status === 'pendente');
+
+  it('pausa terminada antes da atualização: a renovação cria a dose de 29/08 às 22:00, atrasada', () => {
+    renovarJanela(db, esquema(), new Date(2026, 9, 13, 10));
+    expect(iniciosPendentes().map((d) => d.dataHoraPrevista)).toEqual([new Date(2026, 7, 29, 22, 0)]);
+    expect(montarAgendaDoDia(db, new Date(2026, 9, 13, 10))).toMatchObject([
+      { tipo: 'aguardando_cartela', inicioPrevisto: new Date(2026, 7, 29, 22, 0), atrasada: true },
+    ]);
+  });
+
+  it('renovar de novo não cria outra', () => {
+    renovarJanela(db, esquema(), new Date(2026, 9, 13, 10));
+    renovarJanela(db, esquema(), new Date(2026, 9, 14, 10));
+    expect(iniciosPendentes()).toHaveLength(1);
+  });
+
+  it('app sem abrir durante o início previsto: uma única dose, no dia previsto', () => {
+    // Ciclo de 01/10: a janela criada em 30/09 vai até 28/10 e não alcança o início (29/10 às 22:00).
+    db.update(esquemas).set({ dataInicioCiclo: new Date(2026, 9, 1, 22, 0) }).run();
+    materializarJanela(db, esquema(), new Date(2026, 8, 30, 10));
+    expect(iniciosPendentes().map((d) => d.dataHoraPrevista)).toEqual([new Date(2026, 9, 1, 22, 0)]);
+
+    renovarJanela(db, esquema(), new Date(2026, 10, 2, 10));
+    const novaCartela = iniciosPendentes().filter((d) => d.dataHoraPrevista! > new Date(2026, 9, 2));
+    expect(novaCartela.map((d) => d.dataHoraPrevista)).toEqual([new Date(2026, 9, 29, 22, 0)]);
+  });
+
+  it('horário editado depois do início previsto do dia: uma só dose de início, no novo horário', () => {
+    // Sem ciclo, início previsto hoje (13/10) às 22:00; às 22:30 o horário muda para 23:00.
+    db.update(esquemas).set({ dataInicioCiclo: null, inicioCartelaPrevisto: new Date(2026, 9, 13) }).run();
+    materializarJanela(db, esquema(), new Date(2026, 9, 13, 10));
+    editarEsquema(db, esquemaId, { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '23:00' }, new Date(2026, 9, 13, 22, 30));
+    expect(iniciosPendentes().map((d) => d.dataHoraPrevista)).toEqual([new Date(2026, 9, 13, 23, 0)]);
+  });
+
+  it('horário editado com a cartela atrasada de dias anteriores: uma só dose, no dia previsto e no novo horário', () => {
+    renovarJanela(db, esquema(), new Date(2026, 9, 13, 10));
+    editarEsquema(db, esquemaId, { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '21:00' }, new Date(2026, 9, 13, 11));
+    expect(iniciosPendentes().map((d) => d.dataHoraPrevista)).toEqual([new Date(2026, 7, 29, 21, 0)]);
   });
 });

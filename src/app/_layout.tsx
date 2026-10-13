@@ -14,6 +14,7 @@ import { deveExibirSaudacao } from '@/domain/daily-greeting/saudacao';
 import { marcarPerdidasPorTempo } from '@/domain/adherence-history/perdidas';
 import { renovarJanelasAtivas } from '@/domain/dose-scheduling/janela-rolante';
 import { consumirAberturaPeloAlarme } from '@/lib/alarme-dose';
+import { aplicarCorrecoesUnicas } from '@/lib/correcoes-unicas';
 import { consumirAberturaPorNotificacao } from '@/lib/notificacoes-seguras';
 import { aplicarAparenciaSalva, lerUltimaSaudacao, usePreferencias } from '@/lib/preferencias';
 
@@ -71,6 +72,7 @@ export default function RootLayout() {
     // também no Expo Go, porque não depende de notificações. Roda antes do
     // reconciliador, que agenda os lembretes a partir dessas doses.
     const manter = () => {
+      aplicarCorrecoesUnicas(db);
       renovarJanelasAtivas(db);
       marcarPerdidasPorTempo(db);
     };

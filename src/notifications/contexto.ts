@@ -11,10 +11,13 @@ import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import { construirAlvosDeDoses, construirAlvosDePausa } from '@/domain/dose-notifications/alvos';
 import { type AlvoNotificacao } from '@/domain/dose-notifications/reconciliador';
+import type { DadosTextoDose } from '@/domain/dose-notifications/textos';
+import { ehInicioDeCartelaPendente } from '@/domain/dose-scheduling/ciclico';
 import { SEMANAS_JANELA_MAXIMA } from '@/domain/dose-scheduling/janela-rolante';
 import type { Esquema } from '@/domain/dose-scheduling/types';
 
 export interface ContextoDose {
+  dose: NonNullable<ReturnType<typeof buscarDosePorId>>;
   esquema: Esquema;
   medicamento: NonNullable<ReturnType<typeof buscarMedicamentoPorId>>;
 }
@@ -30,7 +33,22 @@ export function buscarContextoDaDose(db: AppDb, doseId: string): ContextoDose | 
   const medicamento = buscarMedicamentoPorId(db, esquemaRow.medicamentoId);
   if (!medicamento) return null;
 
-  return { esquema: paraEsquemaDominio(esquemaRow), medicamento };
+  return { dose, esquema: paraEsquemaDominio(esquemaRow), medicamento };
+}
+
+/**
+ * Entrada de `textosDaDose` a partir do contexto: os dois agendadores (a
+ * notificação e o alarme nativo) montam o texto por aqui, para nunca
+ * divergirem (fix-revisao-inicio-de-cartela).
+ */
+export function dadosDoTextoDaDose({ dose, esquema, medicamento }: ContextoDose): DadosTextoDose {
+  return {
+    nomeMedicamento: medicamento.nome,
+    dosagem: medicamento.dosagem,
+    criticidade: medicamento.criticidade,
+    notificacoesSemResposta: dose.notificacoesSemResposta,
+    inicioDeCartela: esquema.tipo === 'CICLICO' && ehInicioDeCartelaPendente(esquema, dose),
+  };
 }
 
 /** Medicamento dono de um esquema — usado para montar o conteúdo do lembrete de pausa de ciclo. */

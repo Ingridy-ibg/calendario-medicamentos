@@ -1,11 +1,11 @@
 import {
   cancelScheduledNotificationAsync,
+  dismissNotificationAsync,
   getAllScheduledNotificationsAsync,
   SchedulableTriggerInputTypes,
   scheduleNotificationAsync,
 } from 'expo-notifications';
 
-import { buscarDosePorId } from '@/db/repositories/doses';
 import type { AppDb } from '@/db/repositories/types';
 import {
   analisarIdentificador,
@@ -15,10 +15,9 @@ import {
 } from '@/domain/dose-notifications/reconciliador';
 import { CANAIS_NOTIFICACAO } from '@/domain/dose-notifications/types';
 import { textosDaDose } from '@/domain/dose-notifications/textos';
-import { ehInicioDeCartelaPendente } from '@/domain/dose-scheduling/ciclico';
 import { agendarAlarme, cancelarAlarme, linkDoAlarme, listarAlarmesAgendados } from '@/lib/alarme-dose';
 
-import { buscarContextoDaDose, buscarMedicamentoDoEsquema } from './contexto';
+import { buscarContextoDaDose, buscarMedicamentoDoEsquema, dadosDoTextoDaDose } from './contexto';
 import { conteudoDose, conteudoLembretePausa } from './conteudo';
 
 /**
@@ -57,19 +56,12 @@ const agendadorNotificacoes: Agendador = {
     await cancelScheduledNotificationAsync(alvo.identifier);
 
     if (analisado.tipo === 'dose') {
-      const dose = buscarDosePorId(db, analisado.doseId);
       const contexto = buscarContextoDaDose(db, analisado.doseId);
-      if (!dose || !contexto) return;
+      if (!contexto) return;
 
       await scheduleNotificationAsync({
         identifier: alvo.identifier,
-        content: conteudoDose(analisado.doseId, {
-          nomeMedicamento: contexto.medicamento.nome,
-          dosagem: contexto.medicamento.dosagem,
-          criticidade: contexto.medicamento.criticidade,
-          notificacoesSemResposta: dose.notificacoesSemResposta,
-          inicioDeCartela: contexto.esquema.tipo === 'CICLICO' && ehInicioDeCartelaPendente(contexto.esquema, dose),
-        }),
+        content: conteudoDose(analisado.doseId, dadosDoTextoDaDose(contexto)),
         trigger: {
           type: SchedulableTriggerInputTypes.DATE,
           date: alvo.dataHora,
@@ -96,6 +88,8 @@ const agendadorNotificacoes: Agendador = {
 
   async cancelar(identifier) {
     await cancelScheduledNotificationAsync(identifier);
+    // Também tira da bandeja a notificação já exibida (fix-revisao-inicio-de-cartela, decisão 8).
+    await dismissNotificationAsync(identifier);
   },
 };
 
@@ -108,20 +102,13 @@ const agendadorAlarme: Agendador = {
     const analisado = analisarIdentificador(alvo.identifier);
     if (!analisado || analisado.tipo !== 'dose') return;
 
-    const dose = buscarDosePorId(db, analisado.doseId);
     const contexto = buscarContextoDaDose(db, analisado.doseId);
-    if (!dose || !contexto) {
+    if (!contexto) {
       cancelarAlarme(alvo.identifier);
       return;
     }
     // O mesmo texto da notificação, inclusive o de início de cartela (inicio-de-cartela).
-    const { titulo, corpo } = textosDaDose({
-      nomeMedicamento: contexto.medicamento.nome,
-      dosagem: contexto.medicamento.dosagem,
-      criticidade: contexto.medicamento.criticidade,
-      notificacoesSemResposta: dose.notificacoesSemResposta,
-      inicioDeCartela: contexto.esquema.tipo === 'CICLICO' && ehInicioDeCartelaPendente(contexto.esquema, dose),
-    });
+    const { titulo, corpo } = textosDaDose(dadosDoTextoDaDose(contexto));
     // Agendar o mesmo id substitui o anterior (mesmo PendingIntent).
     agendarAlarme(alvo.identifier, alvo.dataHora, { titulo, texto: corpo, link: linkDoAlarme(analisado.doseId) });
   },
