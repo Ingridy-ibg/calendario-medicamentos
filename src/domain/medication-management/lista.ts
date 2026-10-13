@@ -8,3 +8,10 @@ export const TAMANHO_PAGINA = 20;
 export function naAgendaDoFiltro(filtro: FiltroAgenda): boolean | undefined {
   return filtro === 'todos' ? undefined : filtro === 'na_agenda';
 }
+
+/** Quantos medicamentos o filtro mostra, a partir de `contarMedicamentos` — decide se há mais páginas. */
+export function totalDoFiltro(contagem: { total: number; naAgenda: number }, filtro: FiltroAgenda): number {
+  const naAgenda = naAgendaDoFiltro(filtro);
+  if (naAgenda === undefined) return contagem.total;
+  return naAgenda ? contagem.naAgenda : contagem.total - contagem.naAgenda;
+}

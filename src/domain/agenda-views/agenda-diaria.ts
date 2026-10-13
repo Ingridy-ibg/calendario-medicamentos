@@ -1,6 +1,6 @@
 import { addDays, startOfDay } from 'date-fns';
 
-import { contarDosesRegistradasNoIntervalo, listarDosesDoIntervalo } from '@/db/repositories/doses';
+import { contarDosesRegistradasNoIntervalo, listarDosesDoIntervalo, STATUS_NAO_RESOLVIDOS } from '@/db/repositories/doses';
 import { listarEsquemasAtivos, listarEsquemasNaoRemovidos, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
@@ -76,8 +76,8 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
   // "Se necessário" e "aguardando nova cartela" só na agenda; as doses de hoje
   // vêm de todo esquema não removido, para que as já resolvidas de um
   // medicamento retirado da agenda continuem aparecendo, como no calendário
-  // (fix-agenda-membership-review). Retirar apaga as não resolvidas, então
-  // de um fora da agenda só sobram resolvidas.
+  // (fix-agenda-membership-review). De um fora da agenda só entram as
+  // resolvidas (fix-agenda-membership-review-2, decisão 6).
   const esquemas = listarEsquemasAtivos(db);
   const esquemasPorId = new Map(listarEsquemasNaoRemovidos(db).map((esquema) => [esquema.id, esquema]));
 
@@ -95,6 +95,7 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
     if (!esquema) return [];
     const medicamento = buscarMedicamentoPorId(db, esquema.medicamentoId);
     if (!medicamento || medicamento.deletedAt) return [];
+    if (!medicamento.naAgenda && STATUS_NAO_RESOLVIDOS.includes(dose.status)) return [];
 
     return [
       {

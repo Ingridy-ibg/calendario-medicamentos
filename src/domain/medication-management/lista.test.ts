@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { createTestDb } from '@/db/create-test-db';
+import { removerEsquema } from '@/db/repositories/esquemas';
 import { contarMedicamentos, listarMedicamentosComEsquema } from '@/db/repositories/medicamentos';
 import { cadastrarMedicamento, retirarDaAgenda } from '@/domain/medication-registration/registration';
 
-import { TAMANHO_PAGINA } from './lista';
+import { TAMANHO_PAGINA, totalDoFiltro } from './lista';
 
 const agora = new Date(2026, 9, 12, 7);
-const cadastrar = (db: ReturnType<typeof createTestDb>, nome: string) =>
+const cadastrarComEsquema = (db: ReturnType<typeof createTestDb>, nome: string) =>
   cadastrarMedicamento(
     db,
     {
@@ -15,7 +16,8 @@ const cadastrar = (db: ReturnType<typeof createTestDb>, nome: string) =>
       esquema: { tipo: 'DIARIO', horarios: ['08:00'], duracao: { modo: 'continuo' } },
     },
     agora,
-  ).medicamento.id;
+  );
+const cadastrar = (db: ReturnType<typeof createTestDb>, nome: string) => cadastrarComEsquema(db, nome).medicamento.id;
 const nomes = (linhas: ReturnType<typeof listarMedicamentosComEsquema>) => linhas.map(({ medicamento }) => medicamento.nome);
 
 describe('listarMedicamentosComEsquema', () => {
@@ -55,5 +57,23 @@ describe('listarMedicamentosComEsquema', () => {
 describe('contarMedicamentos', () => {
   it('sem medicamentos é zero', () => {
     expect(contarMedicamentos(createTestDb())).toEqual({ total: 0, naAgenda: 0 });
+  });
+
+  it('medicamento sem esquema ativo não entra no total nem em "na agenda", como na listagem', () => {
+    const db = createTestDb();
+    cadastrar(db, 'Losartana');
+    removerEsquema(db, cadastrarComEsquema(db, 'Vitamina D').esquema.id, agora);
+
+    expect(contarMedicamentos(db)).toEqual({ total: 1, naAgenda: 1 });
+    expect(listarMedicamentosComEsquema(db)).toHaveLength(1);
+  });
+});
+
+describe('totalDoFiltro', () => {
+  it('cada filtro usa a sua parte da contagem', () => {
+    const contagem = { total: 45, naAgenda: 30 };
+    expect(totalDoFiltro(contagem, 'todos')).toBe(45);
+    expect(totalDoFiltro(contagem, 'na_agenda')).toBe(30);
+    expect(totalDoFiltro(contagem, 'fora_da_agenda')).toBe(15);
   });
 });

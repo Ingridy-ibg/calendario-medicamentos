@@ -16,7 +16,7 @@ import { FAMILIA_TEXTO, FAMILIA_TITULO } from '@/constants/fontes';
 import { db } from '@/db/client';
 import type { PrevisaoEstoque } from '@/domain/medication-management/gestao';
 import { type PreviaCadastro } from '@/domain/medication-registration/previa';
-import { adicionarAAgenda, cadastrarMedicamento, prepararCadastro, prepararVoltaAAgenda } from '@/domain/medication-registration/registration';
+import { adicionarAAgenda, cadastrarMedicamento, ErroValidacao, prepararCadastro, prepararVoltaAAgenda } from '@/domain/medication-registration/registration';
 import { textoEstoque } from '@/domain/medication-stock/caixas';
 import type { DadosFormularioMedicamento } from '@/domain/medication-registration/types';
 import { useTheme } from '@/hooks/use-theme';
@@ -118,10 +118,26 @@ export default function ConfirmarCadastroScreen() {
   // Só cadastrar: nada de doses, cartela, tratamento nem "hoje".
   const naAgenda = volta || adicionarNaAgenda;
 
+  /**
+   * Prévia recalculada no toque. Se os dados deixaram de valer desde que a tela
+   * abriu (ex.: passou da meia-noite), mostra a validação e não salva
+   * (fix-agenda-membership-review-2, decisão 3).
+   */
+  function recalcular(calcular: () => PreviaCadastro): PreviaCadastro | null {
+    try {
+      return calcular();
+    } catch (erro) {
+      if (!(erro instanceof ErroValidacao)) throw erro;
+      setAviso(`${Object.values(erro.erros).join(' ')} Toque em "Ajustar" para conferir.`);
+      return null;
+    }
+  }
+
   function confirmar() {
     const agoraConfirmacao = new Date();
     if (modo.tipo === 'volta_agenda') {
-      const novaPrevia = prepararVoltaAAgenda(db, modo.medicamentoId, agoraConfirmacao).previa;
+      const novaPrevia = recalcular(() => prepararVoltaAAgenda(db, modo.medicamentoId, agoraConfirmacao).previa);
+      if (!novaPrevia) return;
       if (assinatura(novaPrevia) !== assinatura(previa!)) {
         definir(dados!, novaPrevia);
         setAviso('Os horários mudaram desde que você abriu esta tela. Confira de novo.');
@@ -135,7 +151,8 @@ export default function ConfirmarCadastroScreen() {
     }
 
     // Só cadastrar descarta "Já estava tomando" — então nem o valida (fix-agenda-membership-review).
-    const novaPrevia = prepararCadastro(adicionarNaAgenda ? dados! : { ...dados!, emUso: undefined }, agoraConfirmacao);
+    const novaPrevia = recalcular(() => prepararCadastro(adicionarNaAgenda ? dados! : { ...dados!, emUso: undefined }, agoraConfirmacao));
+    if (!novaPrevia) return;
     if (adicionarNaAgenda && assinatura(novaPrevia) !== assinatura(previa!)) {
       // O relógio andou e mudou o que seria gravado: mostra de novo em vez de salvar.
       definir(dados!, novaPrevia);

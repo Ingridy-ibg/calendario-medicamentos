@@ -65,17 +65,22 @@ export function removerMedicamento(db: AppDb, id: string, agora: Date) {
  * filtro no SQL; a ordem fica em JS porque o SQLite não ordena acentos como o
  * português ("Ácido" antes de "Amoxicilina") — fix-agenda-membership-review.
  */
+/** Medicamento e esquema não removidos — a mesma base para listar e contar (fix-agenda-membership-review-2, decisão 5). */
+function condicoesDaLista(naAgenda?: boolean) {
+  const condicoes = [isNull(medicamentos.deletedAt), isNull(esquemas.deletedAt)];
+  if (naAgenda !== undefined) condicoes.push(eq(medicamentos.naAgenda, naAgenda));
+  return and(...condicoes);
+}
+
 export function listarMedicamentosComEsquema(
   db: AppDb,
   { naAgenda, limite, deslocamento = 0 }: { naAgenda?: boolean; limite?: number; deslocamento?: number } = {},
 ) {
-  const condicoes = [isNull(medicamentos.deletedAt), isNull(esquemas.deletedAt)];
-  if (naAgenda !== undefined) condicoes.push(eq(medicamentos.naAgenda, naAgenda));
   const ordenados = db
     .select({ medicamento: medicamentos, esquema: esquemas })
     .from(medicamentos)
     .innerJoin(esquemas, eq(esquemas.medicamentoId, medicamentos.id))
-    .where(and(...condicoes))
+    .where(condicoesDaLista(naAgenda))
     .all()
     .sort(
       (a, b) =>
@@ -85,12 +90,13 @@ export function listarMedicamentosComEsquema(
   return ordenados.slice(deslocamento, limite === undefined ? undefined : deslocamento + limite);
 }
 
-/** Quantos medicamentos não removidos existem e quantos estão na agenda (cabeçalho e estado vazio da aba). */
+/** Quantos medicamentos a lista pode mostrar e quantos estão na agenda (cabeçalho, estado vazio e "tem mais" da aba). */
 export function contarMedicamentos(db: AppDb): { total: number; naAgenda: number } {
   const linha = db
     .select({ total: count(), naAgenda: sql<number>`coalesce(sum(${medicamentos.naAgenda}), 0)` })
     .from(medicamentos)
-    .where(isNull(medicamentos.deletedAt))
+    .innerJoin(esquemas, eq(esquemas.medicamentoId, medicamentos.id))
+    .where(condicoesDaLista())
     .get();
   return { total: linha?.total ?? 0, naAgenda: Number(linha?.naAgenda ?? 0) };
 }

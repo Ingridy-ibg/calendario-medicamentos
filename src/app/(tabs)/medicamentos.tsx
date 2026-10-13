@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -17,7 +17,7 @@ import { db } from '@/db/client';
 import { paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { contarMedicamentos, listarMedicamentosComEsquema } from '@/db/repositories/medicamentos';
 import { resumirEsquema, situacaoCiclo, textoSituacaoCiclo } from '@/domain/medication-management/gestao';
-import { type FiltroAgenda, naAgendaDoFiltro, TAMANHO_PAGINA } from '@/domain/medication-management/lista';
+import { type FiltroAgenda, naAgendaDoFiltro, TAMANHO_PAGINA, totalDoFiltro } from '@/domain/medication-management/lista';
 import { type AlertaEstoque, alertaForte, alertaVisivelNaLista, textoAlertaEstoque } from '@/domain/medication-stock/alerta';
 import { textoEstoque } from '@/domain/medication-stock/caixas';
 import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
@@ -43,8 +43,8 @@ const OPCOES_FILTRO = [
 ] as const;
 
 /** Busca e monta só uma página — resumo, situação e alerta de estoque saem apenas dos itens dela. */
-function montarPagina(filtro: FiltroAgenda, deslocamento: number, agora: Date): ItemLista[] {
-  const pagina = listarMedicamentosComEsquema(db, { naAgenda: naAgendaDoFiltro(filtro), limite: TAMANHO_PAGINA, deslocamento });
+function montarPagina(filtro: FiltroAgenda, deslocamento: number, limite: number, agora: Date): ItemLista[] {
+  const pagina = listarMedicamentosComEsquema(db, { naAgenda: naAgendaDoFiltro(filtro), limite, deslocamento });
   return pagina.map(({ medicamento, esquema }) => {
     const dominio = paraEsquemaDominio(esquema);
     return {
@@ -146,22 +146,31 @@ export default function MedicamentosScreen() {
   const [filtro, setFiltro] = useState<FiltroAgenda>('todos');
   const [filtroAberto, setFiltroAberto] = useState(false);
 
-  // No foco e na troca de filtro, recomeça da primeira página.
+  // Quantos itens já foram pedidos, atualizado na hora: dois `onEndReached` antes
+  // do re-render não pedem a mesma página (fix-agenda-membership-review-2, decisão 4).
+  const pedidos = useRef(0);
+  const filtroCarregado = useRef<FiltroAgenda | null>(null);
+
+  // No foco, recarrega tudo o que já estava carregado (volta do detalhe sem
+  // perder a posição); na troca de filtro, recomeça da primeira página.
   useFocusEffect(
     useCallback(() => {
+      const limite = filtroCarregado.current === filtro ? Math.max(pedidos.current, TAMANHO_PAGINA) : TAMANHO_PAGINA;
+      const carregados = montarPagina(filtro, 0, limite, new Date());
+      filtroCarregado.current = filtro;
+      pedidos.current = carregados.length;
       setContagem(contarMedicamentos(db));
-      setItens(montarPagina(filtro, 0, new Date()));
+      setItens(carregados);
     }, [filtro]),
   );
 
-  const naAgenda = contagem.naAgenda;
-  const totalDoFiltro = filtro === 'todos' ? contagem.total : filtro === 'na_agenda' ? contagem.naAgenda : contagem.total - contagem.naAgenda;
-  const temMais = itens.length < totalDoFiltro;
   const filtroAplicado = filtro !== 'todos';
 
   function carregarMais() {
-    if (!temMais) return;
-    const proxima = montarPagina(filtro, itens.length, new Date());
+    const deslocamento = pedidos.current;
+    if (deslocamento >= totalDoFiltro(contagem, filtro)) return;
+    pedidos.current = deslocamento + TAMANHO_PAGINA;
+    const proxima = montarPagina(filtro, deslocamento, TAMANHO_PAGINA, new Date());
     if (proxima.length > 0) setItens((atuais) => [...atuais, ...proxima]);
   }
 
@@ -170,7 +179,7 @@ export default function MedicamentosScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
         <View style={{ flex: 1, gap: 4 }}>
           <ThemedText type="small" themeColor="textSecondary">
-            {naAgenda === 1 ? '1 na agenda' : `${naAgenda} na agenda`}
+            {contagem.naAgenda === 1 ? '1 na agenda' : `${contagem.naAgenda} na agenda`}
           </ThemedText>
           <ThemedText type="display" accessibilityRole="header" numberOfLines={1}>
             Medicamentos

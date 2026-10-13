@@ -1,4 +1,4 @@
-import { addDays, differenceInCalendarDays, isSameDay, startOfDay, subDays } from 'date-fns';
+import { addDays, addHours, differenceInCalendarDays, isSameDay, startOfDay, subDays } from 'date-fns';
 
 import { combinarDataEHorario } from '@/domain/dose-scheduling/horario';
 import { gerarPrimeiraDoseIntervalo } from '@/domain/dose-scheduling/intervalo-horas';
@@ -100,6 +100,24 @@ function duracao(modo: { modo: 'continuo' } | { modo: 'dias'; dias: number }): n
   return modo.modo === 'continuo' ? null : modo.dias;
 }
 
+/**
+ * Horários de hoje da grade atual já cobertos por doses resolvidas hoje
+ * (fix-agenda-membership-review-2, decisão 1): cada resolvida cobre o horário
+ * livre mais próximo de onde estava prevista (empate: o mais cedo). Se a grade
+ * mudou fora da agenda, o dia não passa do número de horários da grade.
+ */
+function horariosCobertosHoje(gradeDeHoje: Date[], resolvidasDeHoje: Date[]): Date[] {
+  const livres = [...gradeDeHoje].sort((a, b) => a.getTime() - b.getTime());
+  const cobertos: Date[] = [];
+  for (const previsto of [...resolvidasDeHoje].sort((a, b) => a.getTime() - b.getTime())) {
+    if (livres.length === 0) break;
+    const distancia = (horario: Date) => Math.abs(horario.getTime() - previsto.getTime());
+    const maisProximo = livres.reduce((melhor, horario, i) => (distancia(horario) < distancia(livres[melhor]) ? i : melhor), 0);
+    cobertos.push(...livres.splice(maisProximo, 1));
+  }
+  return cobertos;
+}
+
 function resolverPlano(dados: DadosFormularioMedicamento, agora: Date, historico: HistoricoDaVolta | null): PlanoCadastro {
   const emUso = dados.emUso?.dados;
   const hoje = startOfDay(agora);
@@ -125,6 +143,11 @@ function resolverPlano(dados: DadosFormularioMedicamento, agora: Date, historico
       { id: 'previa', medicamentoId: 'previa', tipo: 'INTERVALO_HORAS', intervaloHoras: dados.esquema.intervaloHoras, duracaoDias: null, dataInicio: agora },
       { agora, ultimaDose },
     ).dataHoraPrevista;
+    // Volta à agenda: horário que já tem dose resolvida passa para o seguinte (fix-agenda-membership-review-2, decisão 2).
+    const jaResolvidos = new Set(plano.horariosJaResolvidos.map((dose) => dose.getTime()));
+    while (jaResolvidos.has(plano.primeiraDoseIntervalo.getTime())) {
+      plano.primeiraDoseIntervalo = addHours(plano.primeiraDoseIntervalo, dados.esquema.intervaloHoras);
+    }
     // A última dose informada, se foi hoje, entra no histórico como tomada.
     if (emUso?.tipo === 'intervalo' && isSameDay(emUso.ultimaDose, agora)) plano.dosesTomadasHoje = [emUso.ultimaDose];
   }
@@ -150,6 +173,12 @@ export function montarPreviaCadastro(dados: DadosFormularioMedicamento, agora: D
     plano.dosesTomadasHoje = dosesDaGrade(esquema, hoje, hoje).filter(
       (dose) => dose <= agora && tomadas.has(`${String(dose.getHours()).padStart(2, '0')}:${String(dose.getMinutes()).padStart(2, '0')}`),
     );
+  }
+
+  // Volta à agenda com a grade editada: as resolvidas de hoje cobrem os horários da grade atual.
+  if (historico && esquema.tipo !== 'INTERVALO_HORAS' && esquema.tipo !== 'SE_NECESSARIO') {
+    const resolvidasDeHoje = historico.resolvidas.filter((dose) => isSameDay(dose.previsto, agora)).map((dose) => dose.previsto);
+    plano.horariosJaResolvidos = [...plano.horariosJaResolvidos, ...horariosCobertosHoje(dosesDaGrade(esquema, hoje, hoje), resolvidasDeHoje)];
   }
 
   // Doses futuras (a grade gravada continua na janela rolante; ver `dosesFuturas`),

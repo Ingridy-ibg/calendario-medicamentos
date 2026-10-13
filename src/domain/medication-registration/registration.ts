@@ -27,7 +27,6 @@ import {
 } from '@/db/repositories/medicamentos';
 import type { AppDb } from '@/db/repositories/types';
 import { estaDentroDaDuracao } from '@/domain/dose-scheduling/duracao';
-import { gerarPrimeiraDoseIntervalo } from '@/domain/dose-scheduling/intervalo-horas';
 import { materializarJanela, rematerializarJanelaAposEdicao } from '@/domain/dose-scheduling/janela-rolante';
 
 import { paraDadosFormulario, paraValoresFormulario } from './formulario';
@@ -135,8 +134,9 @@ function materializarDosesIniciais(db: AppDb, esquemaRow: EsquemaRow, plano: Pla
         const dose = inserirDose(db, { esquemaId: dominio.id, dataHoraPrevista: tomada });
         resolverDose(db, dose.id, { status: 'tomada', dataHoraRegistro: tomada });
       }
-      const primeira = gerarPrimeiraDoseIntervalo(dominio, { agora });
-      inserirDose(db, { esquemaId: dominio.id, dataHoraPrevista: plano.primeiraDoseIntervalo ?? primeira.dataHoraPrevista });
+      // A prévia sempre calcula a primeira dose do intervalo, já sem horários resolvidos.
+      if (!plano.primeiraDoseIntervalo) throw new Error(`Plano do esquema ${dominio.id} sem primeira dose do intervalo`);
+      inserirDose(db, { esquemaId: dominio.id, dataHoraPrevista: plano.primeiraDoseIntervalo });
       return;
     }
     case 'SE_NECESSARIO':
@@ -345,10 +345,12 @@ export function retirarDaAgenda(db: AppDb, medicamentoId: string, agora: Date) {
   });
 }
 
+const foiTomada = (dose: { status: string }) => dose.status === 'tomada' || dose.status === 'tomada_com_atraso';
+
 /** Doses resolvidas de hoje em diante e a última tomada — o que a volta à agenda não pode duplicar nem ignorar. */
 function historicoDaVolta(db: AppDb, esquemaId: string, agora: Date): HistoricoDaVolta {
   const resolvidas = listarDosesResolvidasPorEsquema(db, esquemaId);
-  const tomadas = resolvidas.filter((dose) => dose.status === 'tomada' || dose.status === 'tomada_com_atraso');
+  const tomadas = resolvidas.filter(foiTomada);
   const ultimaTomada = tomadas.reduce<Date | null>((ultima, dose) => {
     const quando = dose.dataHoraRegistro ?? dose.dataHoraPrevista;
     return quando && (ultima === null || quando > ultima) ? quando : ultima;
@@ -356,7 +358,7 @@ function historicoDaVolta(db: AppDb, esquemaId: string, agora: Date): HistoricoD
   return {
     resolvidas: resolvidas.flatMap((dose) =>
       dose.dataHoraPrevista && dose.dataHoraPrevista >= startOfDay(agora)
-        ? [{ previsto: dose.dataHoraPrevista, tomada: dose.status === 'tomada' || dose.status === 'tomada_com_atraso' }]
+        ? [{ previsto: dose.dataHoraPrevista, tomada: foiTomada(dose) }]
         : [],
     ),
     ultimaTomada,

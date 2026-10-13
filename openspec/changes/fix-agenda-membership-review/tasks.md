@@ -15,7 +15,7 @@
 
 ## 4. Paginação na consulta
 
-- [x] 4.1 Reescrever `listarMedicamentosComEsquema` com filtro, `innerJoin` de esquemas, `ORDER BY na_agenda DESC, nome` e `LIMIT/OFFSET`, e criar `contarMedicamentos` com total e "na agenda" (decisão 6); verificar em `medicamentos.test.ts` os três filtros, a ordem (fora da agenda por último, incluindo um nome com acento inicial — trocar `NOCASE` por chave normalizada se a ordem divergir) e 45 medicamentos em páginas de 20/20/5.
+- [x] 4.1 Reescrever `listarMedicamentosComEsquema` como uma única consulta com filtro e `innerJoin` de esquemas não removidos, ordenada em JS (fora da agenda por último, nome com `localeCompare('pt-BR')`, porque `COLLATE NOCASE` põe "Ácido" depois de "Zinco") e fatiada por `limite`/`deslocamento`, e criar `contarMedicamentos` com total e "na agenda" (decisão 6); verificar em `lista.test.ts` os três filtros, a ordem (incluindo um nome com acento inicial) e 45 medicamentos em páginas de 20/20/5.
 - [x] 4.2 Remover `filtrarEPaginar` de `lista.ts` (mantendo `FiltroAgenda` e `TAMANHO_PAGINA`) e seus testes, e fazer a aba Medicamentos buscar e montar só a página pedida, recarregando a primeira página no foco e na troca de filtro, com o cabeçalho e o estado vazio vindos de `contarMedicamentos`; verificar com `npx tsc --noEmit` e `npx vitest run` sem falhas.
 
 ## 5. Limpeza

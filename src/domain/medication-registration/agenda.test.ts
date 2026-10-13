@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createTestDb } from '@/db/create-test-db';
-import { listarDosesPorEsquema, resolverDose } from '@/db/repositories/doses';
+import { inserirDose, listarDosesPorEsquema, resolverDose } from '@/db/repositories/doses';
 import { buscarEsquemaPorId, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import { montarAgendaDoDia } from '@/domain/agenda-views/agenda-diaria';
@@ -53,6 +53,24 @@ describe('fora da agenda some de agenda, calendário futuro, renovação e lembr
     expect(agenda).toHaveLength(1);
     const hoje = montarCalendarioMensal(db, as(1, 0), as(12, 9)).find((d) => d.dia.getDate() === 12)!;
     expect(hoje.itens).toHaveLength(1);
+  });
+
+  it('agenda de hoje descarta dose pendente de um medicamento fora da agenda, mantendo a tomada', () => {
+    const db = createTestDb();
+    const { medicamento, esquema } = cadastrarMedicamento(
+      db,
+      dados({ tipo: 'DIARIO', horarios: ['08:00', '20:00'], duracao: { modo: 'continuo' } }),
+      as(12, 7),
+    );
+    const das8 = listarDosesPorEsquema(db, esquema.id).find((d) => d.dataHoraPrevista!.getTime() === as(12, 8).getTime())!;
+    resolverDose(db, das8.id, { status: 'tomada', dataHoraRegistro: as(12, 8) });
+    retirarDaAgenda(db, medicamento.id, as(12, 9));
+    // Pendente que não deveria existir (ex.: corrida com uma notificação).
+    inserirDose(db, { esquemaId: esquema.id, dataHoraPrevista: as(12, 20) });
+
+    const agenda = montarAgendaDoDia(db, as(12, 9));
+    expect(agenda).toMatchObject([{ tipo: 'dose', horario: as(12, 8), status: 'tomada' }]);
+    expect(agenda).toHaveLength(1);
   });
 
   it('calendário mantém o histórico passado e não projeta o futuro', () => {
@@ -181,6 +199,45 @@ describe('retirarDaAgenda e adicionarAAgenda (1.3)', () => {
     expect(pendentes.slice(0, 4)).toEqual(previa.proximasDoses);
   });
 
+  it('horário editado fora da agenda não ganha dose hoje se a dose da noite já foi tomada', () => {
+    const db = createTestDb();
+    const duasVezes: DadosEsquemaFormulario = { tipo: 'DIARIO', horarios: ['08:00', '20:00'], duracao: { modo: 'continuo' } };
+    const { medicamento, esquema } = cadastrarMedicamento(db, dados(duasVezes), as(12, 7));
+    const das20 = listarDosesPorEsquema(db, esquema.id).find((d) => d.dataHoraPrevista!.getTime() === as(12, 20).getTime())!;
+    resolverDose(db, das20.id, { status: 'tomada', dataHoraRegistro: as(12, 19) });
+    retirarDaAgenda(db, medicamento.id, as(12, 19, 30));
+    editarMedicamento(db, medicamento.id, dados({ ...duasVezes, horarios: ['08:00', '20:30'] }), as(12, 19, 35));
+
+    const { previa } = prepararVoltaAAgenda(db, medicamento.id, as(12, 19, 45));
+    expect(previa.hoje.aAgendar).toEqual([]);
+    expect(previa.proximasDoses[0]).toEqual(as(13, 8));
+    adicionarAAgenda(db, medicamento.id, previa);
+
+    const deHoje = datasDoEsquema(db, esquema.id).filter((d) => d.data.getDate() === 12);
+    expect(deHoje).toEqual([{ data: as(12, 20), status: 'tomada' }]);
+    const pendentes = datasDoEsquema(db, esquema.id).filter((d) => d.status === 'pendente').map((d) => d.data);
+    expect(pendentes.slice(0, 4)).toEqual(previa.proximasDoses);
+  });
+
+  it('horário novo da grade sem dose correspondente entra hoje', () => {
+    const db = createTestDb();
+    const { medicamento, esquema } = cadastrarMedicamento(db, dados(diario), as(12, 7));
+    const das8 = listarDosesPorEsquema(db, esquema.id).find((d) => d.dataHoraPrevista!.getTime() === as(12, 8).getTime())!;
+    resolverDose(db, das8.id, { status: 'tomada', dataHoraRegistro: as(12, 8) });
+    retirarDaAgenda(db, medicamento.id, as(12, 9));
+    editarMedicamento(db, medicamento.id, dados({ ...diario, horarios: ['08:00', '14:00'] }), as(12, 9, 30));
+
+    const { previa } = prepararVoltaAAgenda(db, medicamento.id, as(12, 10));
+    expect(previa.hoje.aAgendar).toEqual([as(12, 14)]);
+    expect(previa.proximasDoses[0]).toEqual(as(12, 14));
+    adicionarAAgenda(db, medicamento.id, previa);
+
+    expect(datasDoEsquema(db, esquema.id).filter((d) => d.data.getDate() === 12)).toEqual([
+      { data: as(12, 8), status: 'tomada' },
+      { data: as(12, 14), status: 'pendente' },
+    ]);
+  });
+
   it('intervalo em horas volta contando da última dose tomada', () => {
     const db = createTestDb();
     const { medicamento, esquema } = cadastrarMedicamento(
@@ -199,6 +256,30 @@ describe('retirarDaAgenda e adicionarAAgenda (1.3)', () => {
     expect(datasDoEsquema(db, esquema.id)).toEqual([
       { data: as(12, 9), status: 'tomada' },
       { data: as(12, 17), status: 'pendente' },
+    ]);
+  });
+
+  it('intervalo em horas pula a próxima dose já pulada ao voltar', () => {
+    const db = createTestDb();
+    const { medicamento, esquema } = cadastrarMedicamento(
+      db,
+      dados({ tipo: 'INTERVALO_HORAS', intervaloHoras: 8, duracao: { modo: 'continuo' } }),
+      as(12, 9),
+    );
+    const primeira = listarDosesPorEsquema(db, esquema.id)[0];
+    resolverDose(db, primeira.id, { status: 'tomada', dataHoraRegistro: as(12, 9) });
+    const das17 = inserirDose(db, { esquemaId: esquema.id, dataHoraPrevista: as(12, 17) });
+    resolverDose(db, das17.id, { status: 'pulada', dataHoraRegistro: as(12, 10) });
+    retirarDaAgenda(db, medicamento.id, as(12, 10, 30));
+
+    const { previa } = prepararVoltaAAgenda(db, medicamento.id, as(12, 11));
+    expect(previa.proximasDoses).toEqual([as(13, 1)]);
+    adicionarAAgenda(db, medicamento.id, previa);
+
+    expect(datasDoEsquema(db, esquema.id)).toEqual([
+      { data: as(12, 9), status: 'tomada' },
+      { data: as(12, 17), status: 'pulada' },
+      { data: as(13, 1), status: 'pendente' },
     ]);
   });
 
@@ -245,6 +326,21 @@ describe('cadastrar sem adicionar à agenda (1.4)', () => {
     const { medicamento, esquema } = cadastrarMedicamento(db, terminado, as(13, 0, 1), { naAgenda: false });
     expect(buscarMedicamentoPorId(db, medicamento.id)?.naAgenda).toBe(false);
     expect(listarDosesPorEsquema(db, esquema.id)).toEqual([]);
+  });
+
+  it('"Já estava tomando" que deixou de valer com a agenda ligada traz a mensagem que a confirmação mostra', () => {
+    const terminado: DadosFormularioMedicamento = {
+      ...dados({ tipo: 'DIARIO', horarios: ['08:00'], duracao: { modo: 'dias', dias: 7 } }),
+      emUso: { dados: { tipo: 'inicio', dataInicio: as(6, 8) }, dosesDeHojeTomadas: [] },
+    };
+    let erro: unknown;
+    try {
+      prepararCadastro(terminado, as(13, 0, 1));
+    } catch (e) {
+      erro = e;
+    }
+    expect(erro).toBeInstanceOf(ErroValidacao);
+    expect(Object.values((erro as ErroValidacao).erros)).toContain('Esse tratamento já terminou.');
   });
 });
 
