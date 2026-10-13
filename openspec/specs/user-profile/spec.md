@@ -46,12 +46,12 @@ A tela de perfil SHALL mostrar se cada permissão de que os lembretes dependem e
 - **WHEN** o usuário abre o perfil com alguma permissão não concedida
 - **THEN** nenhum pedido de permissão aparece até ele tocar em "Permitir"
 
-### Requirement: Aviso de privacidade e versão
-A tela de perfil SHALL informar que os dados do app ficam salvos só no aparelho, e SHALL mostrar a versão do aplicativo.
+### Requirement: Versão do aplicativo no perfil
+A tela de perfil SHALL mostrar a versão do aplicativo no rodapé.
 
 #### Scenario: Rodapé do perfil
 - **WHEN** o usuário rola até o fim da tela de perfil
-- **THEN** vê "Seus dados ficam salvos só neste aparelho." e o número da versão do app
+- **THEN** vê o número da versão do app
 
 ### Requirement: Acesso ao perfil pela barra de abas
 A barra de abas SHALL ter, como última aba, "Perfil", com o ícone clássico de pessoa (cabeça e ombros), que abre a tela "Meu perfil". O cabeçalho da agenda SHALL NOT ter botão de perfil. Como é uma aba, a tela de perfil SHALL NOT ter botão de voltar.

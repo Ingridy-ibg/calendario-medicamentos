@@ -6,7 +6,7 @@ Apresenta o aplicativo na primeira abertura e concentra, num momento explicado a
 ## Requirements
 
 ### Requirement: Boas-vindas na primeira abertura
-Na primeira vez que o aplicativo é aberto num aparelho, o sistema SHALL exibir uma tela de boas-vindas antes da agenda diária, apresentando o propósito do app, seus principais recursos (lembretes que insistem até haver resposta, histórico de adesão no calendário, aviso de estoque baixo) e informando que os dados ficam salvos só no aparelho.
+Na primeira vez que o aplicativo é aberto num aparelho, o sistema SHALL exibir uma tela de boas-vindas antes da agenda diária, apresentando o propósito do app e seus principais recursos (lembretes que insistem até haver resposta, histórico de adesão no calendário, aviso de estoque baixo).
 
 #### Scenario: Primeira abertura
 - **WHEN** o usuário abre o app pela primeira vez após instalá-lo

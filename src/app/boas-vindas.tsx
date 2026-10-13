@@ -107,8 +107,7 @@ function EtapaApresentacao({ aoAvancar }: { aoAvancar: () => void }) {
             Seus remédios,{'\n'}na hora certa.
           </ThemedText>
           <ThemedText themeColor="textSecondary">
-            Organize horários, acompanhe cada dose e saiba quando o estoque está acabando. Tudo fica salvo só neste
-            aparelho.
+            Organize horários, acompanhe cada dose e saiba quando o estoque está acabando.
           </ThemedText>
           <View style={{ gap: 12, marginTop: 8 }}>
             {RECURSOS.map(({ icone, texto }) => (
@@ -191,7 +190,7 @@ function EtapaPerfil() {
                 Como podemos te chamar?
               </ThemedText>
               <ThemedText themeColor="textSecondary">
-                Usamos seu nome só para te cumprimentar. Ele fica salvo apenas neste aparelho.
+                Usamos seu nome só para te cumprimentar.
               </ThemedText>
             </View>
 

@@ -132,7 +132,7 @@ export default function PerfilScreen() {
             <CabecalhoSecao>Você</CabecalhoSecao>
             <CampoTexto
               rotulo="Nome"
-              ajuda="Opcional. Fica só neste aparelho."
+              ajuda="Opcional."
               value={rascunhoNome}
               onChangeText={setRascunhoNome}
               onBlur={() => definirNome(rascunhoNome)}
@@ -179,9 +179,6 @@ export default function PerfilScreen() {
           </Cartao>
 
           <View style={{ alignItems: 'center', gap: 4, paddingTop: 4 }}>
-            <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-              Seus dados ficam salvos só neste aparelho.
-            </ThemedText>
             <ThemedText type="caption" themeColor="textSecondary">
               Versão {Constants.expoConfig?.version ?? '—'}
             </ThemedText>
