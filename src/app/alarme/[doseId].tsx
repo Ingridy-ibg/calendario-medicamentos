@@ -51,9 +51,15 @@ function carregar(doseId: string): { dados: DadosTela | null; resolvida: boolean
   };
 }
 
+/**
+ * A rota fica fora das protegidas (abre antes de qualquer outra tela), então
+ * a saída não pode supor a agenda liberada: sem a boas-vindas concluída, vai
+ * para ela (fix-revisao-inicio-de-cartela).
+ */
 function fechar() {
   if (router.canGoBack()) router.back();
-  else router.replace('/');
+  else if (usePreferencias.getState().boasVindasConcluida) router.replace('/');
+  else router.replace('/boas-vindas');
 }
 
 /**

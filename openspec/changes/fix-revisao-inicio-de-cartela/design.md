@@ -79,6 +79,13 @@ O resultado é sempre uma única dose de início pendente.
 
 *Alternativa considerada:* trocar a notificação por um "Dose registrada" que some sozinho. Foi descartada porque, no Android, a notificação sumir depois da ação já é o retorno esperado, e o `expo-notifications` não oferece expiração automática.
 
+### 9. Saída da tela de alarme e backup automático desligado
+
+- A rota `alarme/[doseId]` fica fora das rotas protegidas, para abrir mesmo antes de qualquer outra tela. Por isso o "Fechar" não pode supor que a agenda está liberada: sem a boas-vindas concluída, ele vai para `/boas-vindas`.
+- `android.allowBackup: false` no `app.json`. O Auto Backup do Android restaura o banco, o kv-store e as SharedPreferences do módulo de alarme a partir de cópias feitas em momentos diferentes. Isso gera alarmes de doses que não existem.
+
+*Trade-off:* trocar de aparelho não traz os medicamentos. Hoje isso já não é confiável, e uma exportação explícita, se fizer falta, é outra change.
+
 ## Risks / Trade-offs
 
 - **[Risco] Alarme de início tocando logo após a atualização para um ciclo que terminou há meses.** → É o comportamento especificado para cartela atrasada: o usuário confirma pela agenda ou pelo alarme e o ciclo recomeça. Fica registrado nas notas do APK.

@@ -18,3 +18,10 @@ Quando o usuário toca numa ação da notificação de uma dose comum ("Tomei ag
 #### Scenario: Abrir o app não some com notificação pendente
 - **WHEN** a notificação da dose comum das 08:00 está na bandeja, a dose continua pendente e o usuário abre o app
 - **THEN** a notificação continua na bandeja
+
+### Requirement: A tela de alarme sempre tem saída
+Fechar a tela de alarme SHALL levar o usuário a uma tela utilizável do app: a anterior, se houver, senão a agenda, ou a boas-vindas quando ela ainda não foi concluída. Isso vale inclusive quando a tela abre para uma dose que não existe mais.
+
+#### Scenario: Alarme de dose inexistente logo após instalar
+- **WHEN** o app recém-instalado, com a boas-vindas ainda não concluída, abre a tela de alarme mostrando "Dose não encontrada" e o usuário toca em "Fechar"
+- **THEN** o app mostra a boas-vindas

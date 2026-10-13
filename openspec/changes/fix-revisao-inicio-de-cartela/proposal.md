@@ -7,6 +7,8 @@ A revisão de código do merge de `inicio-de-cartela` encontrou falhas reais:
 
 Além disso, no teste do APK, responder a uma notificação de dose comum pelos botões ("Tomei agora", "Adiar", "Não tomar") registra a resposta, mas a notificação continua na bandeja. Parece que nada aconteceu.
 
+E, ao reinstalar o APK, o Android restaurou do backup automático dados antigos do app. Um alarme de dose inexistente abriu a tela de alarme ("Dose não encontrada"), e o "Fechar" dela não levava a lugar nenhum, porque a boas-vindas ainda não estava concluída.
+
 Há também inconsistências menores na agenda e no calendário, e duplicação no agendamento. O primeiro problema atinge justamente quem já usava o app antes do novo APK, por isso a correção vem antes de validar o resto no aparelho.
 
 ## What Changes
@@ -16,6 +18,8 @@ Há também inconsistências menores na agenda e no calendário, e duplicação 
   - editar o horário (ou os dias) com a dose de início pendente substitui essa dose, em vez de criar outra.
 - **"Só cadastrar" ignora a resposta do 1º comprimido**, assim como já ignora "Já estava tomando". O medicamento fica fora da agenda, sem âncora de ciclo e sem início previsto.
 - **Notificação sai da bandeja depois da resposta**: tocar num botão da notificação de uma dose comum, ou resolver a dose no app com a notificação aberta, remove essa notificação. No "Adiar", ela some e volta em 30 minutos. Arrastar para dispensar continua sem efeito no reenvio.
+- **Tela de alarme nunca prende o usuário**: "Fechar" leva à boas-vindas quando ela ainda não foi concluída.
+- **Sem backup automático do Android** (`android.allowBackup: false`): reinstalar não restaura alarmes nem banco de backups antigos e possivelmente desencontrados.
 - **Calendário**: o dia de hoje com a dose de início pendente mostra a marca de "Nova cartela", como os dias futuros.
 - **Agenda**: o atraso do início da cartela usa a mesma regra das doses (`estaAtrasada`) e é avaliado na hora de exibir, não só ao carregar a agenda.
 - **Agendamento**: os dois agendadores (notificação e alarme nativo) montam o texto da dose por uma função única, com uma só leitura da dose no banco.
@@ -48,5 +52,7 @@ Ficam de fora dois apontamentos da revisão que descrevem o comportamento especi
 - `src/domain/agenda-views/marcador-dia.ts`, `agenda-diaria.ts`, `src/app/(tabs)/index.tsx`: marca de hoje e atraso na exibição.
 - `src/notifications/agendamento.ts` e `src/notifications/contexto.ts`: texto da dose num só lugar; `ContextoDose` passa a trazer a dose.
 - `src/notifications/agendamento.ts` e `src/notifications/tarefas.ts`: remover a notificação exibida ao cancelar o alvo e no "Adiar".
+- `src/app/alarme/[doseId].tsx`: "Fechar" sem a boas-vindas concluída.
+- `app.json`: `android.allowBackup: false`. Muda a fingerprint, então exige um APK novo, que esta change já precisa.
 - `src/lib/preferencias.ts` e o ponto de inicialização: execução única da correção.
 - Testes vitest para cada cenário.
