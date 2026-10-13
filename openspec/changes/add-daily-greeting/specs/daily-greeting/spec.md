@@ -75,11 +75,11 @@ A tela de saudação SHALL ter uma ilustração e cores próprias de cada perío
 - **THEN** a tela usa fundo escuro com a ilustração do sol
 
 ### Requirement: Passagem automática para a agenda
-A tela de saudação SHALL seguir sozinha para a agenda cerca de 2,5 segundos depois de exibida, com um indicador de progresso, e SHALL ir para a agenda imediatamente ao toque em qualquer ponto da tela ou no botão "Ver agenda". Com leitor de tela ativo, a passagem automática SHALL ser desativada e a tela SHALL aguardar o toque em "Ver agenda". Voltar da agenda SHALL NOT reabrir a saudação.
+A tela de saudação SHALL seguir sozinha para a agenda cerca de 5 segundos depois de exibida, com um indicador de progresso, e SHALL ir para a agenda imediatamente ao toque em qualquer ponto da tela ou no botão "Ver agenda". Com leitor de tela ativo, a passagem automática SHALL ser desativada e a tela SHALL aguardar o toque em "Ver agenda". Voltar da agenda SHALL NOT reabrir a saudação.
 
 #### Scenario: Sem interação
 - **WHEN** o usuário não toca em nada na saudação
-- **THEN** a agenda é exibida depois de cerca de 2,5 segundos
+- **THEN** a agenda é exibida depois de cerca de 5 segundos
 
 #### Scenario: Toque para pular
 - **WHEN** o usuário toca na tela de saudação

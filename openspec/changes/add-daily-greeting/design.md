@@ -35,7 +35,7 @@ Esta change se apoia no que `apply-visual-identity` cria: o nome em `perfil.nome
 
 ### 3. Rota `src/app/saudacao.tsx`
 
-Tela cheia no `Stack` raiz, sem cabeçalho e sem gesto de voltar. Timer de 2,5 s com barra de progresso animada (Reanimated, já instalado); `Pressable` de tela inteira e botão "Ver agenda" chamam `router.replace('/')`. `AccessibilityInfo.isScreenReaderEnabled()` desliga o timer e esconde a barra (spec). Os itens do dia vêm de `montarAgendaDoDia(db, agora)` + `resumirDia`.
+Tela cheia no `Stack` raiz, sem cabeçalho e sem gesto de voltar. Timer de 5 s com barra de progresso animada (Reanimated, já instalado); `Pressable` de tela inteira e botão "Ver agenda" chamam `router.replace('/')`. `AccessibilityInfo.isScreenReaderEnabled()` desliga o timer e esconde a barra (spec). Os itens do dia vêm de `montarAgendaDoDia(db, agora)` + `resumirDia`.
 
 ### 4. Cores por período
 

@@ -18,7 +18,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { gravarUltimaSaudacao, usePreferencias } from '@/lib/preferencias';
 import { Tocavel } from '@/components/ui/tocavel';
 
-const DURACAO_MS = 2500;
+const DURACAO_MS = 5000;
 
 function capitalizar(texto: string) {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
@@ -68,7 +68,7 @@ function Ilustracao({ periodo, paleta }: { periodo: Periodo; paleta: PaletaSauda
 
 /**
  * Tela de saudação da primeira abertura do dia (specs/daily-greeting). Segue
- * sozinha para a agenda em ~2,5 s — exceto com leitor de tela ativo — e
+ * sozinha para a agenda em ~5 s — exceto com leitor de tela ativo — e
  * qualquer toque pula a espera. Sai com `replace` para que voltar não a reabra.
  */
 export default function SaudacaoScreen() {
