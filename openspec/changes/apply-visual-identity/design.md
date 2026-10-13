@@ -83,7 +83,7 @@ Adicionar `@expo-google-fonts/bricolage-grotesque` (pesos 500 e 700) e `@expo-go
 
 Em `src/domain/agenda-views/`, novas funções sobre o `ItemAgenda[]` que `montarAgendaDoDia` já devolve (sem mudar sua assinatura):
 
-- `resumirDia(itens, agora)` → `{ tomadas, total, marcas: StatusDose[], proxima: ItemAgendaDose | null }`. Conta só itens `tipo: 'dose'`; tomadas = `tomada` + `tomada_com_atraso`; próxima = a dose `pendente`/`aguardando` de menor horário (em empate, a primeira na ordem da lista), mesmo que o horário já tenha passado.
+- `resumirDia(itens)` → `{ tomadas, total, marcas: StatusDose[], proxima: ItemAgendaDose | null }`. Conta só itens `tipo: 'dose'`; tomadas = `tomada` + `tomada_com_atraso`; próxima = a dose `pendente`/`aguardando` de menor horário (em empate, a primeira na ordem da lista), mesmo que o horário já tenha passado.
 - `agruparPorPeriodo(itens)` → seções `manha` / `tarde` / `noite` / `se_necessario`, omitindo as vazias. Corte em 12:00 e 18:00 no horário local. Dose sem horário previsto (não deveria ocorrer para doses agendadas) cai em "Manhã" no topo para não sumir da lista.
 
 Testes no mesmo padrão de `agenda-diaria.test.ts`.
@@ -109,6 +109,16 @@ A preferência (`sistema` | `claro` | `escuro`) fica no `expo-sqlite/kv-store`, 
 - Nome: `kv-store`, chave `perfil.nome`, gravado ao sair do campo (`onBlur`) e ao sair da tela; valor só com espaços conta como vazio. Não vai para o banco Drizzle pelos mesmos motivos da decisão 5.
 - Permissões: novas funções de **consulta** em `src/notifications/permissoes.ts` (`consultarPermissoes()` → `{ notificacoes, alarmeExato }`), separadas das de pedido que já existem. Notificações via `getPermissionsAsync` do `expo-notifications`; alarme exato pela API que a v57 oferecer — se não houver como consultar, a linha mostra só a ação "Abrir configurações", sem estado (registrar na tarefa 1.1). "Permitir" reaproveita `solicitarPermissaoPostNotifications` / `solicitarPermissaoAlarmeExato`. A situação é relida quando a tela volta ao foco e quando o app volta do segundo plano (`AppState`), já que a permissão pode ter sido dada na configuração do sistema. Tudo por import dinâmico, pela mesma regra do Expo Go do resto do projeto; no Expo Go a seção mostra que lembretes não estão disponíveis.
 - A versão vem de `expo-constants` (`Constants.expoConfig?.version`), já instalado.
+
+### Notas da conferência na documentação do Expo v57 (tarefa 1.1)
+
+- **`SymbolView` (expo-symbols)**: funciona no Android (Material Symbols), no Expo Go e na web, mas `name` precisa ser um objeto por plataforma (`{ ios, android, web }`); string pura é tratada como SF Symbol e não renderiza no Android. `Icone` passa sempre o objeto. Biblioteca em beta.
+- **`NativeTabs.Trigger.Icon`**: aceita `md` (nome Material) — confirmado nos tipos do pacote instalado; prioridade no Android `drawable` > `md` > `src`. `NativeTabs` aceita `iconColor`, `tintColor`, `indicatorColor`, `backgroundColor` e `labelStyle`.
+- **`expo-sqlite/kv-store`**: `import Storage from 'expo-sqlite/kv-store'`, com `getItemSync`, `setItemSync`, `removeItemSync` (valores string).
+- **`useFonts`**: devolve `[loaded, error]`; suportado no Expo Go.
+- **Redirecionamento inicial**: em vez de `Redirect`, usar `Stack.Protected` com `guard` (ao mudar o guard, o expo-router leva à primeira tela disponível e limpa o histórico da protegida). A flag da boas-vindas fica num store Zustand inicializado do kv-store, para o layout reagir quando a boas-vindas a grava. `redirectTo` só existe a partir do SDK 58 e não é usado.
+- **`Appearance.setColorScheme`**: no RN 0.86 o tipo é `'light' | 'dark' | 'unspecified'`; "Sistema" usa `'unspecified'` (não `null`).
+- **Alarme exato**: o `expo-notifications` não expõe consulta de `SCHEDULE_EXACT_ALARM`. Conforme o fallback já previsto, a linha do perfil mostra só "Abrir configurações", sem estado.
 
 ## Risks / Trade-offs
 

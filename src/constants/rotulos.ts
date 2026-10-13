@@ -1,3 +1,4 @@
+import type { ThemeColor } from '@/constants/cores';
 import type { StatusDose } from '@/db/schema';
 
 export const ROTULOS_STATUS_DOSE: Record<StatusDose, string> = {
@@ -9,12 +10,25 @@ export const ROTULOS_STATUS_DOSE: Record<StatusDose, string> = {
   perdida: 'Perdida',
 };
 
-/** Cor de texto por status, reaproveitada na agenda diária e no calendário mensal. */
-export const CORES_STATUS_DOSE: Record<StatusDose, string> = {
-  pendente: '#60646C',
-  aguardando: '#b45309',
-  tomada: '#16a34a',
-  tomada_com_atraso: '#b45309',
-  pulada: '#60646C',
-  perdida: '#dc2626',
+/**
+ * Token de cor por status, reaproveitado na agenda diária, no calendário
+ * mensal e no detalhe — resolva com `useTheme()` para respeitar o tema.
+ */
+export const TOKEN_STATUS_DOSE: Record<StatusDose, ThemeColor> = {
+  pendente: 'statusNeutro',
+  aguardando: 'statusAtraso',
+  tomada: 'statusTomada',
+  tomada_com_atraso: 'statusAtraso',
+  pulada: 'statusNeutro',
+  perdida: 'statusPerdida',
+};
+
+/** Fundo suave do ícone de status (ex.: o quadrado com ✓ na agenda). */
+export const TOKEN_STATUS_DOSE_SUAVE: Record<StatusDose, ThemeColor> = {
+  pendente: 'statusNeutroSoft',
+  aguardando: 'statusAtrasoSoft',
+  tomada: 'statusTomadaSoft',
+  tomada_com_atraso: 'statusAtrasoSoft',
+  pulada: 'statusNeutroSoft',
+  perdida: 'statusPerdidaSoft',
 };

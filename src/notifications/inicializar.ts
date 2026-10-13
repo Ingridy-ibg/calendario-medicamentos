@@ -15,11 +15,14 @@ import { registrarReconciliacaoPeriodica, registrarTarefaDeNotificacao } from '.
  * a rede de segurança da janela rolante (5.3) e da recuperação após reboot
  * (5.13), ver design.md.
  */
-export async function inicializarNotificacoes(): Promise<void> {
+export async function inicializarNotificacoes({ pedirPermissoes }: { pedirPermissoes: boolean }): Promise<void> {
   configurarComportamentoEmPrimeiroPlano();
   await configurarCanaisAndroid();
   await configurarCategoriasAcao();
-  await solicitarPermissoesEssenciais();
+  // Antes de a boas-vindas ser concluída, nenhum pedido automático (specs/onboarding).
+  if (pedirPermissoes) {
+    await solicitarPermissoesEssenciais();
+  }
   await registrarTarefaDeNotificacao();
   await registrarReconciliacaoPeriodica();
   await reconciliarNotificacoes(db);

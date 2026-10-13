@@ -18,67 +18,100 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CORES_STATUS_DOSE, ROTULOS_STATUS_DOSE } from '@/constants/rotulos';
+import { Cartao } from '@/components/ui/cartao';
+import { Icone } from '@/components/ui/icone';
+import { FAMILIA_TEXTO, FAMILIA_TITULO } from '@/constants/fontes';
+import { ROTULOS_STATUS_DOSE, TOKEN_STATUS_DOSE } from '@/constants/rotulos';
+import type { ThemeColor } from '@/constants/theme';
 import { db } from '@/db/client';
-import {
-  type DiaCalendario,
-  type ItemDiaCalendario,
-  montarCalendarioMensal,
-} from '@/domain/agenda-views/calendario-mensal';
+import { type DiaCalendario, type ItemDiaCalendario, montarCalendarioMensal } from '@/domain/agenda-views/calendario-mensal';
+import { type MarcadorDia, marcadorDoDia } from '@/domain/agenda-views/marcador-dia';
+import { useTheme } from '@/hooks/use-theme';
 
 const ROTULOS_DIA_SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
-function corDoDia(itens: ItemDiaCalendario[]): string | null {
-  const historico = itens.filter((item): item is Extract<ItemDiaCalendario, { tipo: 'historico' }> => item.tipo === 'historico');
-  if (historico.some((item) => item.status === 'perdida')) return CORES_STATUS_DOSE.perdida;
-  if (historico.some((item) => item.status === 'pulada')) return CORES_STATUS_DOSE.pulada;
-  if (historico.some((item) => item.status === 'tomada_com_atraso')) return CORES_STATUS_DOSE.tomada_com_atraso;
-  if (historico.some((item) => item.status === 'tomada')) return CORES_STATUS_DOSE.tomada;
-  if (itens.some((item) => item.tipo === 'previsto')) return '#3c87f7';
-  if (itens.some((item) => item.tipo === 'pausa-ciclo')) return '#9ca3af';
-  return null;
+const LEGENDA: { rotulo: string; marcador: MarcadorDia }[] = [
+  { rotulo: 'Tomadas', marcador: { token: 'statusTomada', estilo: 'cheio' } },
+  { rotulo: 'Com atraso', marcador: { token: 'statusAtraso', estilo: 'cheio' } },
+  { rotulo: 'Pulada', marcador: { token: 'statusNeutro', estilo: 'cheio' } },
+  { rotulo: 'Perdida', marcador: { token: 'statusPerdida', estilo: 'cheio' } },
+  { rotulo: 'Prevista', marcador: { token: 'accent', estilo: 'contorno' } },
+];
+
+function capitalizar(texto: string) {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+function Ponto({ marcador, tamanho = 6 }: { marcador: MarcadorDia | null; tamanho?: number }) {
+  const theme = useTheme();
+  const cor = marcador ? theme[marcador.token] : 'transparent';
+  return (
+    <View
+      style={{
+        width: tamanho,
+        height: tamanho,
+        borderRadius: tamanho / 2,
+        backgroundColor: marcador?.estilo === 'cheio' ? cor : 'transparent',
+        borderWidth: marcador?.estilo === 'contorno' ? 1.5 : 0,
+        borderColor: cor,
+      }}
+    />
+  );
+}
+
+function descreverItem(item: ItemDiaCalendario): { detalhe: string; status: string; token: ThemeColor; marcador: MarcadorDia } {
+  if (item.tipo === 'historico') {
+    return {
+      detalhe: item.horario ? format(item.horario, 'HH:mm') : 'Sem horário',
+      status: ROTULOS_STATUS_DOSE[item.status],
+      token: TOKEN_STATUS_DOSE[item.status],
+      marcador:
+        item.status === 'pendente' || item.status === 'aguardando'
+          ? { token: 'accent', estilo: 'contorno' }
+          : { token: TOKEN_STATUS_DOSE[item.status], estilo: 'cheio' },
+    };
+  }
+  if (item.tipo === 'previsto') {
+    return {
+      detalhe: `${format(item.horario, 'HH:mm')}${item.estimado ? ' (estimado)' : ''}`,
+      status: 'Prevista',
+      token: 'textSecondary',
+      marcador: { token: 'accent', estilo: 'contorno' },
+    };
+  }
+  return { detalhe: 'Cartela em pausa', status: 'Dia de pausa', token: 'textSecondary', marcador: { token: 'statusNeutro', estilo: 'contorno' } };
 }
 
 function ItemDoDia({ item }: { item: ItemDiaCalendario }) {
-  if (item.tipo === 'historico') {
-    return (
-      <View className="flex-row items-center justify-between">
-        <ThemedText type="small">{item.nome}</ThemedText>
-        <ThemedText type="small" style={{ color: CORES_STATUS_DOSE[item.status] }}>
-          {item.horario ? `${format(item.horario, 'HH:mm')} · ` : ''}
-          {ROTULOS_STATUS_DOSE[item.status]}
-        </ThemedText>
-      </View>
-    );
-  }
-  if (item.tipo === 'previsto') {
-    return (
-      <View className="flex-row items-center justify-between">
-        <ThemedText type="small">{item.nome}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {format(item.horario, 'HH:mm')}
-          {item.estimado ? ' (estimado)' : ''}
-        </ThemedText>
-      </View>
-    );
-  }
+  const theme = useTheme();
+  const { detalhe, status, token, marcador } = descreverItem(item);
   return (
-    <View className="flex-row items-center justify-between">
-      <ThemedText type="small">{item.nome}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        Dia de pausa
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <Ponto marcador={marcador} tamanho={10} />
+      <View style={{ flex: 1 }}>
+        <ThemedText style={{ fontFamily: FAMILIA_TEXTO[600], fontSize: 15, lineHeight: 20 }}>{item.nome}</ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary" numerico>
+          {detalhe}
+        </ThemedText>
+      </View>
+      <ThemedText type="smallBold" style={{ color: theme[token] }}>
+        {status}
       </ThemedText>
     </View>
   );
 }
 
 export default function CalendarioMensalScreen() {
+  const theme = useTheme();
   const [mesReferencia, setMesReferencia] = useState(() => startOfMonth(new Date()));
   const [diaSelecionado, setDiaSelecionado] = useState(() => new Date());
+  const [hoje, setHoje] = useState(() => new Date());
   const [dias, setDias] = useState<DiaCalendario[]>([]);
 
   const recarregar = useCallback(() => {
-    setDias(montarCalendarioMensal(db, mesReferencia, new Date()));
+    const agora = new Date();
+    setHoje(agora);
+    setDias(montarCalendarioMensal(db, mesReferencia, agora));
   }, [mesReferencia]);
 
   useFocusEffect(recarregar);
@@ -95,64 +128,131 @@ export default function CalendarioMensalScreen() {
   }, [mesReferencia]);
 
   const diaCalendarioSelecionado = dias.find((d) => isSameDay(d.dia, diaSelecionado));
+  const tituloDia = capitalizar(
+    `${isSameDay(diaSelecionado, hoje) ? 'hoje, ' : ''}${format(diaSelecionado, "EEEE, d 'de' MMMM", { locale: ptBR })}`,
+  );
+
+  const botaoMes = (rotulo: string, icone: 'voltar' | 'avancar', aoTocar: () => void) => (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={rotulo}
+      onPress={aoTocar}
+      style={({ pressed }) => ({
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.surface,
+        opacity: pressed ? 0.7 : 1,
+      })}>
+      <Icone nome={icone} cor={theme.text} tamanho={22} />
+    </Pressable>
+  );
 
   return (
     <ThemedView style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView contentContainerClassName="gap-4 p-4" contentInsetAdjustmentBehavior="automatic">
-          <View className="flex-row items-center justify-between">
-            <Pressable onPress={() => setMesReferencia((m) => subMonths(m, 1))} className="px-3 py-2">
-              <ThemedText type="link">◀</ThemedText>
-            </Pressable>
-            <ThemedText type="smallBold" style={{ textTransform: 'capitalize' }}>
-              {format(mesReferencia, 'MMMM yyyy', { locale: ptBR })}
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ScrollView contentContainerStyle={{ gap: 16, padding: 20, paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <ThemedText type="display" accessibilityRole="header" style={{ flex: 1 }}>
+              {capitalizar(format(mesReferencia, 'MMMM', { locale: ptBR }))}{' '}
+              <ThemedText type="display" themeColor="textSecondary" style={{ fontFamily: FAMILIA_TITULO[500] }}>
+                {format(mesReferencia, 'yyyy')}
+              </ThemedText>
             </ThemedText>
-            <Pressable onPress={() => setMesReferencia((m) => addMonths(m, 1))} className="px-3 py-2">
-              <ThemedText type="link">▶</ThemedText>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {botaoMes('Mês anterior', 'voltar', () => setMesReferencia((m) => subMonths(m, 1)))}
+              {botaoMes('Próximo mês', 'avancar', () => setMesReferencia((m) => addMonths(m, 1)))}
+            </View>
           </View>
 
-          <View className="flex-row">
-            {ROTULOS_DIA_SEMANA.map((rotulo, indice) => (
-              <View key={indice} className="flex-1 items-center">
-                <ThemedText type="small" themeColor="textSecondary">
-                  {rotulo}
-                </ThemedText>
-              </View>
-            ))}
-          </View>
+          <Cartao style={{ paddingHorizontal: 10, paddingVertical: 14, gap: 6 }}>
+            <View style={{ flexDirection: 'row', paddingBottom: 4 }}>
+              {ROTULOS_DIA_SEMANA.map((rotulo, indice) => (
+                <View key={indice} style={{ flex: 1, alignItems: 'center' }}>
+                  <ThemedText type="caption" themeColor="textSecondary" style={{ fontFamily: FAMILIA_TEXTO[700] }}>
+                    {rotulo}
+                  </ThemedText>
+                </View>
+              ))}
+            </View>
 
-          <View className="gap-2">
             {semanas.map((semana, indiceSemana) => (
-              <View key={indiceSemana} className="flex-row">
+              <View key={indiceSemana} style={{ flexDirection: 'row' }}>
                 {semana.map((dia) => {
                   const doMes = isSameMonth(dia, mesReferencia);
                   const diaCalendario = dias.find((d) => isSameDay(d.dia, dia));
-                  const cor = doMes ? corDoDia(diaCalendario?.itens ?? []) : null;
+                  const marcador = doMes ? marcadorDoDia(diaCalendario?.itens ?? []) : null;
                   const selecionado = isSameDay(dia, diaSelecionado);
+                  const ehHoje = isSameDay(dia, hoje);
 
                   return (
-                    <Pressable key={dia.toISOString()} onPress={() => setDiaSelecionado(dia)} className="flex-1 items-center py-1">
-                      <ThemedView
-                        type={selecionado ? 'backgroundSelected' : undefined}
-                        className="items-center justify-center rounded-full"
-                        style={{ width: 32, height: 32 }}>
-                        <ThemedText type="small" themeColor={doMes ? 'text' : 'textSecondary'}>
+                    <Pressable
+                      key={dia.toISOString()}
+                      accessibilityRole="button"
+                      accessibilityLabel={format(dia, "d 'de' MMMM", { locale: ptBR }) + (ehHoje ? ', hoje' : '')}
+                      accessibilityState={{ selected: selecionado }}
+                      onPress={() => setDiaSelecionado(dia)}
+                      style={{ flex: 1, alignItems: 'center', paddingVertical: 4, gap: 3, minHeight: 50 }}>
+                      <View
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: selecionado ? theme.inverseSurface : 'transparent',
+                          borderWidth: ehHoje && !selecionado ? 2 : 0,
+                          borderColor: theme.accent,
+                        }}>
+                        <ThemedText
+                          numerico
+                          style={{
+                            fontSize: 15,
+                            fontFamily: selecionado || ehHoje ? FAMILIA_TEXTO[700] : FAMILIA_TEXTO[500],
+                            color: selecionado
+                              ? theme.onInverse
+                              : ehHoje
+                                ? theme.accent
+                                : doMes
+                                  ? theme.text
+                                  : theme.textSecondary,
+                          }}>
                           {dia.getDate()}
                         </ThemedText>
-                      </ThemedView>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, marginTop: 2, backgroundColor: cor ?? 'transparent' }} />
+                      </View>
+                      <Ponto marcador={marcador} />
                     </Pressable>
                   );
                 })}
               </View>
             ))}
-          </View>
 
-          <ThemedView type="backgroundElement" className="gap-3 rounded-xl p-4">
-            <ThemedText type="smallBold" style={{ textTransform: 'capitalize' }}>
-              {format(diaSelecionado, "EEEE, d 'de' MMMM", { locale: ptBR })}
-            </ThemedText>
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                columnGap: 14,
+                rowGap: 6,
+                paddingTop: 8,
+                borderTopWidth: 1,
+                borderTopColor: theme.divider,
+              }}>
+              {LEGENDA.map(({ rotulo, marcador }) => (
+                <View key={rotulo} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Ponto marcador={marcador} tamanho={8} />
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    {rotulo}
+                  </ThemedText>
+                </View>
+              ))}
+            </View>
+          </Cartao>
+
+          <Cartao accessibilityLiveRegion="polite">
+            <ThemedText style={{ fontFamily: FAMILIA_TEXTO[700] }}>{tituloDia}</ThemedText>
             {!diaCalendarioSelecionado || diaCalendarioSelecionado.itens.length === 0 ? (
               <ThemedText type="small" themeColor="textSecondary">
                 Nada registrado ou previsto para este dia.
@@ -160,7 +260,7 @@ export default function CalendarioMensalScreen() {
             ) : (
               diaCalendarioSelecionado.itens.map((item, indice) => <ItemDoDia key={indice} item={item} />)
             )}
-          </ThemedView>
+          </Cartao>
         </ScrollView>
       </SafeAreaView>
     </ThemedView>

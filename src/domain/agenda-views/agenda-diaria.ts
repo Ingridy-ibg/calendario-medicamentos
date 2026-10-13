@@ -16,6 +16,8 @@ export interface ItemAgendaDose {
   dosagem: string;
   horario: Date | null;
   status: StatusDose;
+  /** Quando a dose foi resolvida (ex.: horário real de uma tomada com atraso). */
+  horarioRegistro: Date | null;
   /** Só para CICLICO com dose hoje — dia de pausa não tem dose para confirmar (ver `dose-scheduling/ciclico.ts`). */
   posicaoCiclo: { dia: number; totalDiasAtivos: number } | null;
   alertaEstoque: boolean;
@@ -65,6 +67,7 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
         dosagem: medicamento.dosagem,
         horario: dose.dataHoraPrevista,
         status: dose.status,
+        horarioRegistro: dose.dataHoraRegistro,
         posicaoCiclo:
           esquema.tipo === 'CICLICO' && dose.numeroNoCiclo !== null
             ? { dia: dose.numeroNoCiclo, totalDiasAtivos: esquema.diasAtivos ?? 0 }

@@ -16,7 +16,7 @@ A agenda diária SHALL ter, no cabeçalho, um botão circular de perfil que abre
 - **THEN** o botão de perfil mostra um ícone de pessoa
 
 ### Requirement: Nome do usuário opcional
-A tela de perfil SHALL ter um campo de nome opcional, salvo no aparelho e mantido entre aberturas do app. O nome SHALL ser usado apenas para exibição (inicial no botão de perfil e no topo da tela de perfil).
+A tela de perfil SHALL ter um campo de nome opcional, salvo no aparelho e mantido entre aberturas do app. O nome SHALL ser usado apenas para exibição dentro do app (por exemplo, a inicial no botão de perfil e o topo da tela de perfil; outras capabilities, como a saudação diária, podem exibi-lo) e SHALL NOT sair do aparelho.
 
 #### Scenario: Informando o nome
 - **WHEN** o usuário digita "Ana" no campo de nome e sai da tela de perfil

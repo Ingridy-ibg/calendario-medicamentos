@@ -1,13 +1,20 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CORES_STATUS_DOSE, ROTULOS_STATUS_DOSE } from '@/constants/rotulos';
+import { Botao } from '@/components/ui/botao';
+import { CabecalhoSecao } from '@/components/ui/cabecalho-secao';
+import { Cartao } from '@/components/ui/cartao';
+import { Icone } from '@/components/ui/icone';
+import { IconeStatus } from '@/components/ui/icone-status';
+import { FAMILIA_TEXTO, FAMILIA_TITULO } from '@/constants/fontes';
+import { TOKEN_STATUS_DOSE } from '@/constants/rotulos';
+import type { StatusDose } from '@/db/schema';
 import { db } from '@/db/client';
 import { buscarEsquemaPorId, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import {
@@ -16,10 +23,14 @@ import {
   type ItemAgendaSeNecessario,
   montarAgendaDoDia,
 } from '@/domain/agenda-views/agenda-diaria';
+import { agruparPorPeriodo, type ResumoDoDia, resumirDia } from '@/domain/agenda-views/resumo-dia';
 import { confirmarDose, pularDose } from '@/domain/adherence-history/resolucao';
 import { registrarDoseSeNecessarioNoBanco } from '@/domain/adherence-history/se-necessario';
 import type { EsquemaSeNecessario } from '@/domain/dose-scheduling/types';
+import { inicialDoNome } from '@/domain/preferencias/preferencias';
+import { useTheme } from '@/hooks/use-theme';
 import { reconciliarNotificacoesSeDisponivel } from '@/lib/notificacoes-seguras';
+import { usePreferencias } from '@/lib/preferencias';
 
 function esquemaDominioOuFalha(esquemaId: string) {
   const linha = buscarEsquemaPorId(db, esquemaId);
@@ -29,8 +40,105 @@ function esquemaDominioOuFalha(esquemaId: string) {
   return paraEsquemaDominio(linha);
 }
 
-function ItemDose({ item, aoMudar }: { item: ItemAgendaDose; aoMudar: () => void }) {
+function capitalizar(texto: string) {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** Rótulo curto de status na agenda (canvas "Agenda do dia"). */
+const ROTULO_CURTO: Record<StatusDose, string> = {
+  pendente: 'Pendente',
+  aguardando: 'Aguardando',
+  tomada: 'Tomada',
+  tomada_com_atraso: 'Com atraso',
+  pulada: 'Pulada',
+  perdida: 'Perdida',
+};
+
+function SeloEstoqueBaixo() {
+  const theme = useTheme();
+  return (
+    <View style={{ backgroundColor: theme.statusPerdidaSoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
+      <ThemedText type="caption" style={{ color: theme.statusPerdida, fontFamily: FAMILIA_TEXTO[600] }}>
+        Estoque baixo
+      </ThemedText>
+    </View>
+  );
+}
+
+/** Botão circular de perfil: inicial do nome ou ícone de pessoa (specs/user-profile). */
+function BotaoPerfil() {
+  const theme = useTheme();
+  const inicial = inicialDoNome(usePreferencias((estado) => estado.nome));
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Meu perfil"
+      onPress={() => router.push('/perfil')}
+      style={({ pressed }) => ({
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.accentSoft,
+        opacity: pressed ? 0.7 : 1,
+      })}>
+      {inicial ? (
+        <ThemedText style={{ color: theme.onAccentSoft, fontFamily: FAMILIA_TEXTO[700], fontSize: 17 }}>{inicial}</ThemedText>
+      ) : (
+        <Icone nome="pessoa" cor={theme.onAccentSoft} tamanho={22} />
+      )}
+    </Pressable>
+  );
+}
+
+function ResumoCartao({ resumo }: { resumo: ResumoDoDia }) {
+  const theme = useTheme();
+  const corMarca = (status: StatusDose) =>
+    status === 'tomada' ? theme.inverseTomada : status === 'tomada_com_atraso' ? theme.inverseAtraso : theme.inverseTrack;
+
+  return (
+    <Cartao fundo="inverseSurface" style={{ gap: 14 }} accessibilityLabel={`${resumo.tomadas} de ${resumo.total} doses tomadas hoje`}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <ThemedText numerico style={{ color: theme.onInverse, fontFamily: FAMILIA_TITULO[700], fontSize: 30, lineHeight: 36 }}>
+          {resumo.tomadas}
+          <ThemedText style={{ color: theme.onInverseSecondary, fontFamily: FAMILIA_TITULO[700], fontSize: 20 }}>
+            {` / ${resumo.total} doses`}
+          </ThemedText>
+        </ThemedText>
+        <ThemedText type="caption" style={{ color: theme.onInverseSecondary }}>
+          hoje
+        </ThemedText>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 4 }} importantForAccessibility="no-hide-descendants">
+        {resumo.marcas.map((status, indice) => (
+          <View key={indice} style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: corMarca(status) }} />
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Icone nome={resumo.proxima ? 'relogio' : 'check'} cor={theme.inverseTomada} tamanho={18} />
+        <ThemedText type="small" style={{ color: theme.onInverseSecondary, flex: 1 }}>
+          {resumo.proxima ? (
+            <>
+              Próxima:{' '}
+              <ThemedText type="smallBold" style={{ color: theme.onInverse }}>
+                {resumo.proxima.nome}
+              </ThemedText>
+              {resumo.proxima.horario ? ` às ${format(resumo.proxima.horario, 'HH:mm')}` : ''}
+            </>
+          ) : (
+            'Todas as doses de hoje foram concluídas.'
+          )}
+        </ThemedText>
+      </View>
+    </Cartao>
+  );
+}
+
+function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque: boolean; aoMudar: () => void }) {
+  const theme = useTheme();
   const resolvida = item.status !== 'pendente' && item.status !== 'aguardando';
+  const corStatus = theme[TOKEN_STATUS_DOSE[item.status]];
 
   async function tomarAgora() {
     confirmarDose(db, esquemaDominioOuFalha(item.esquemaId), item.doseId, new Date());
@@ -44,14 +152,23 @@ function ItemDose({ item, aoMudar }: { item: ItemAgendaDose; aoMudar: () => void
     aoMudar();
   }
 
+  const detalhe = [item.dosagem, item.horario ? format(item.horario, 'HH:mm') : null].filter(Boolean).join(' · ');
+
   return (
-    <ThemedView type="backgroundElement" className="gap-2 rounded-xl p-4">
-      <View className="flex-row items-start justify-between">
-        <View className="flex-1 gap-1">
-          <ThemedText type="smallBold">{item.nome}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {item.dosagem}
-            {item.horario ? ` · ${format(item.horario, 'HH:mm')}` : ''}
+    <Cartao
+      style={{
+        borderRadius: 18,
+        padding: 16,
+        gap: 14,
+        borderWidth: destaque ? 2 : 0,
+        borderColor: destaque ? theme.accent : 'transparent',
+      }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
+        <IconeStatus status={item.status} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <ThemedText style={{ fontFamily: FAMILIA_TEXTO[600] }}>{item.nome}</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" numerico>
+            {detalhe}
           </ThemedText>
           {item.posicaoCiclo ? (
             <ThemedText type="small" themeColor="textSecondary">
@@ -59,31 +176,22 @@ function ItemDose({ item, aoMudar }: { item: ItemAgendaDose; aoMudar: () => void
             </ThemedText>
           ) : null}
         </View>
-        <View className="items-end gap-1">
-          <ThemedText type="small" style={{ color: CORES_STATUS_DOSE[item.status] }}>
-            {ROTULOS_STATUS_DOSE[item.status]}
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          <ThemedText type="smallBold" style={{ color: corStatus, textAlign: 'right' }}>
+            {ROTULO_CURTO[item.status]}
+            {item.status === 'tomada_com_atraso' && item.horarioRegistro ? `\n${format(item.horarioRegistro, 'HH:mm')}` : ''}
           </ThemedText>
-          {item.alertaEstoque ? (
-            <ThemedText type="small" style={{ color: '#dc2626' }}>
-              Estoque baixo
-            </ThemedText>
-          ) : null}
+          {item.alertaEstoque ? <SeloEstoqueBaixo /> : null}
         </View>
       </View>
 
       {!resolvida ? (
-        <View className="flex-row gap-2">
-          <Pressable onPress={tomarAgora} className="flex-1 items-center rounded-lg bg-blue-600 px-3 py-2">
-            <ThemedText type="small" style={{ color: '#ffffff' }}>
-              Tomei agora
-            </ThemedText>
-          </Pressable>
-          <Pressable onPress={naoTomar} className="flex-1 items-center rounded-lg border border-neutral-300 px-3 py-2 dark:border-neutral-700">
-            <ThemedText type="small">Não tomar</ThemedText>
-          </Pressable>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Botao rotulo="Tomei agora" onPress={tomarAgora} style={{ flex: 1 }} />
+          <Botao rotulo="Não tomar" variante="secundario" onPress={naoTomar} style={{ flex: 1 }} />
         </View>
       ) : null}
-    </ThemedView>
+    </Cartao>
   );
 }
 
@@ -95,36 +203,25 @@ function ItemSeNecessario({ item, aoMudar }: { item: ItemAgendaSeNecessario; aoM
   }
 
   return (
-    <ThemedView type="backgroundElement" className="gap-2 rounded-xl p-4">
-      <View className="flex-row items-start justify-between">
-        <View className="flex-1 gap-1">
-          <ThemedText type="smallBold">{item.nome}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {item.dosagem} · se necessário
-          </ThemedText>
-        </View>
-        <View className="items-end gap-1">
-          <ThemedText type="small" themeColor="textSecondary">
-            {item.registradasHoje} de {item.limiteDiario}
-          </ThemedText>
-          {item.alertaEstoque ? (
-            <ThemedText type="small" style={{ color: '#dc2626' }}>
-              Estoque baixo
-            </ThemedText>
-          ) : null}
-        </View>
-      </View>
-
-      <Pressable onPress={registrar} className="items-center rounded-lg bg-blue-600 px-3 py-2">
-        <ThemedText type="small" style={{ color: '#ffffff' }}>
-          Registrar dose
+    <Cartao style={{ borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <ThemedText style={{ fontFamily: FAMILIA_TEXTO[600] }}>{item.nome}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary" numerico>
+          {item.dosagem} · {item.registradasHoje} de {item.limiteDiario} hoje
         </ThemedText>
-      </Pressable>
-    </ThemedView>
+        {item.alertaEstoque ? (
+          <View style={{ alignSelf: 'flex-start', marginTop: 4 }}>
+            <SeloEstoqueBaixo />
+          </View>
+        ) : null}
+      </View>
+      <Botao rotulo="Registrar dose" variante="suave" onPress={registrar} />
+    </Cartao>
   );
 }
 
 export default function AgendaDoDiaScreen() {
+  const theme = useTheme();
   const [itens, setItens] = useState<ItemAgenda[]>([]);
   const [hoje, setHoje] = useState(new Date());
 
@@ -136,40 +233,58 @@ export default function AgendaDoDiaScreen() {
 
   useFocusEffect(recarregar);
 
+  const resumo = useMemo(() => resumirDia(itens), [itens]);
+  const secoes = useMemo(() => agruparPorPeriodo(itens), [itens]);
+
   return (
     <ThemedView style={{ flex: 1 }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView contentContainerClassName="gap-3 p-4" contentInsetAdjustmentBehavior="automatic">
-          <View className="flex-row items-center justify-between">
-            <View className="gap-1">
-              <ThemedText type="title" style={{ fontSize: 28, lineHeight: 34 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ScrollView contentContainerStyle={{ gap: 18, padding: 20, paddingBottom: 32 }} contentInsetAdjustmentBehavior="automatic">
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+            <View style={{ flex: 1, gap: 4 }}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {capitalizar(format(hoje, "EEEE, d 'de' MMMM", { locale: ptBR }))}
+              </ThemedText>
+              <ThemedText type="display" accessibilityRole="header" numberOfLines={1}>
                 Agenda
               </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {format(hoje, "EEEE, d 'de' MMMM", { locale: ptBR })}
-              </ThemedText>
             </View>
-            <Pressable
-              onPress={() => router.push('/medicamento/novo')}
-              className="items-center justify-center rounded-full bg-blue-600 px-4 py-2">
-              <ThemedText type="smallBold" style={{ color: '#ffffff' }}>
-                + Novo
-              </ThemedText>
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Botao
+                rotulo="Novo"
+                icone="mais"
+                onPress={() => router.push('/medicamento/novo')}
+                style={{ borderRadius: 999, paddingLeft: 14, paddingRight: 18 }}
+              />
+              <BotaoPerfil />
+            </View>
           </View>
 
-          {itens.length === 0 ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              Nada por aqui hoje.
-            </ThemedText>
+          {resumo.total > 0 ? <ResumoCartao resumo={resumo} /> : null}
+
+          {secoes.length === 0 ? (
+            <Cartao style={{ alignItems: 'center', paddingVertical: 28 }}>
+              <Icone nome="pilula" cor={theme.textSecondary} />
+              <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                Nada por aqui hoje.
+              </ThemedText>
+            </Cartao>
           ) : (
-            itens.map((item) =>
-              item.tipo === 'dose' ? (
-                <ItemDose key={item.doseId} item={item} aoMudar={recarregar} />
-              ) : (
-                <ItemSeNecessario key={item.esquemaId} item={item} aoMudar={recarregar} />
-              ),
-            )
+            secoes.map((secao) => (
+              <View key={secao.chave} style={{ gap: 10 }}>
+                <CabecalhoSecao>{secao.titulo}</CabecalhoSecao>
+                {secao.chave === 'se_necessario'
+                  ? secao.itens.map((item) => <ItemSeNecessario key={item.esquemaId} item={item} aoMudar={recarregar} />)
+                  : secao.itens.map((item) => (
+                      <ItemDose
+                        key={item.doseId}
+                        item={item}
+                        destaque={item.doseId === resumo.proxima?.doseId}
+                        aoMudar={recarregar}
+                      />
+                    ))}
+              </View>
+            ))
           )}
         </ScrollView>
       </SafeAreaView>

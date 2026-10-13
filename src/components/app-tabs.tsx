@@ -1,31 +1,34 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { FAMILIA_TEXTO } from '@/constants/fontes';
+import { useTheme } from '@/hooks/use-theme';
 
+/**
+ * Abas principais (specs/visual-identity): fundo de superfície, aba ativa na
+ * cor de destaque e inativas em texto secundário. Ícones Material no Android
+ * (`md`) e SF Symbols no iOS (`sf`).
+ */
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+  const theme = useTheme();
 
   return (
     <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+      backgroundColor={theme.surface}
+      indicatorColor={theme.accentSoft}
+      tintColor={theme.accent}
+      iconColor={{ default: theme.textSecondary, selected: theme.accent }}
+      labelStyle={{
+        default: { color: theme.textSecondary, fontFamily: FAMILIA_TEXTO[600] },
+        selected: { color: theme.accent, fontFamily: FAMILIA_TEXTO[700] },
+      }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Agenda</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
-        />
+        <NativeTabs.Trigger.Icon md="format_list_bulleted" sf="list.bullet" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="calendario">
         <NativeTabs.Trigger.Label>Calendário</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
-        />
+        <NativeTabs.Trigger.Icon md="calendar_month" sf="calendar" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

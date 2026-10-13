@@ -1,3 +1,10 @@
 export { inicializarNotificacoes } from './inicializar';
-export { solicitarPermissaoFullScreenIntent } from './permissoes';
+export {
+  consultarPermissoes,
+  type SituacaoPermissoes,
+  solicitarPermissaoAlarmeExato,
+  solicitarPermissaoFullScreenIntent,
+  solicitarPermissaoPostNotifications,
+  solicitarPermissoesEssenciais,
+} from './permissoes';
 export { reconciliarNotificacoes } from './reconciliador';
