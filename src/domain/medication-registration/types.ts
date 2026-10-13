@@ -8,6 +8,8 @@ export interface CamposComunsFormulario {
   criticidade: Criticidade;
   quantidadeEmEstoque: number;
   quantidadePorEmbalagem: number;
+  /** Como a tela informou o estoque (stock-in-boxes); presente, os erros caem nesses campos. */
+  emCaixas?: { caixasFechadas: number; naCaixaEmUso: number };
 }
 
 export type DadosEsquemaFormulario =

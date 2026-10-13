@@ -10,8 +10,10 @@ import { Icone } from '@/components/ui/icone';
 import { Tocavel } from '@/components/ui/tocavel';
 import { FAMILIA_TEXTO, FAMILIA_TITULO } from '@/constants/fontes';
 import { db } from '@/db/client';
+import { listarEsquemasPorMedicamento } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import { validarQuantidadeCompra } from '@/domain/medication-management/gestao';
+import { textoEstoque } from '@/domain/medication-stock/caixas';
 import { reporEstoque } from '@/domain/medication-stock/estoque';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -23,6 +25,7 @@ export default function RegistrarCompraScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [medicamento] = useState(() => buscarMedicamentoPorId(db, id));
+  const [ciclico] = useState(() => listarEsquemasPorMedicamento(db, id).some((e) => e.deletedAt === null && e.tipo === 'CICLICO'));
   const porEmbalagem = medicamento?.quantidadePorEmbalagem ?? 1;
   const [texto, setTexto] = useState(String(porEmbalagem));
 
@@ -138,21 +141,15 @@ export default function RegistrarCompraScreen() {
             })}
           </View>
 
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: 14,
-              borderRadius: 14,
-              backgroundColor: theme.background,
-            }}>
+          <View style={{ gap: 4, padding: 14, borderRadius: 14, backgroundColor: theme.background }}>
             <ThemedText type="small" themeColor="textSecondary">
               Estoque depois da compra
             </ThemedText>
-            <ThemedText numerico style={{ fontFamily: FAMILIA_TEXTO[700] }}>
-              <ThemedText themeColor="textSecondary">{medicamento.quantidadeEmEstoque} → </ThemedText>
-              {validacao.ok ? medicamento.quantidadeEmEstoque + validacao.quantidade : medicamento.quantidadeEmEstoque} un.
+            <ThemedText type="caption" themeColor="textSecondary">
+              Agora: {textoEstoque(medicamento.quantidadeEmEstoque, porEmbalagem, ciclico)}
+            </ThemedText>
+            <ThemedText style={{ fontFamily: FAMILIA_TEXTO[700] }}>
+              {textoEstoque(medicamento.quantidadeEmEstoque + (validacao.ok ? validacao.quantidade : 0), porEmbalagem, ciclico)}
             </ThemedText>
           </View>
 

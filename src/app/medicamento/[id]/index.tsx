@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { Alert, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SeloEstoque } from '@/components/medicamento/selo-estoque';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
@@ -30,7 +31,9 @@ import {
   textoSituacaoCiclo,
 } from '@/domain/medication-management/gestao';
 import { removerMedicamentoComHistorico } from '@/domain/medication-registration/registration';
-import { temAlertaDeRecompra } from '@/domain/medication-stock/alerta';
+import { type AlertaEstoque, alertaForte, textoAlertaEstoque } from '@/domain/medication-stock/alerta';
+import { paraCaixas, textoEstoque } from '@/domain/medication-stock/caixas';
+import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
 import { useTheme } from '@/hooks/use-theme';
 import { reconciliarNotificacoesSeDisponivel } from '@/lib/notificacoes-seguras';
 
@@ -41,6 +44,7 @@ interface DadosDetalhe {
   esquema: Esquema;
   adesao: AdesaoDias | null;
   previsao: PrevisaoEstoque | null;
+  alerta: AlertaEstoque;
 }
 
 function carregar(id: string, agora: Date): DadosDetalhe | null {
@@ -54,6 +58,7 @@ function carregar(id: string, agora: Date): DadosDetalhe | null {
     esquema,
     adesao: esquema.tipo === 'SE_NECESSARIO' ? null : adesaoUltimosDias(db, id, agora),
     previsao: preverFimDoEstoque(esquema, medicamento.quantidadeEmEstoque, agora, proxima),
+    alerta: alertaEstoqueDoMedicamento(db, esquema, medicamento, agora),
   };
 }
 
@@ -135,10 +140,14 @@ export default function DetalheMedicamentoScreen() {
   useFocusEffect(recarregar);
 
   if (!dados) return <ThemedView style={{ flex: 1 }} />;
-  const { medicamento, esquema, adesao, previsao } = dados;
+  const { medicamento, esquema, adesao, previsao, alerta } = dados;
   const descricao = descreverEsquema(esquema);
-  const estoqueBaixo = temAlertaDeRecompra(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem);
-  const fracaoEmbalagem = Math.min(1, medicamento.quantidadeEmEstoque / Math.max(1, medicamento.quantidadePorEmbalagem));
+  const ciclico = esquema.tipo === 'CICLICO';
+  // A sobra é só um aviso discreto abaixo da barra; o selo fica para os alertas.
+  const alertaSelo = alerta?.tipo === 'sobra' ? null : alerta;
+  const estoqueBaixo = alertaForte(alerta);
+  const { emUso } = paraCaixas(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem);
+  const fracaoEmbalagem = Math.min(1, emUso / Math.max(1, medicamento.quantidadePorEmbalagem));
 
   async function alternarNotificacoes(ativas: boolean) {
     definirNotificacoesAtivas(db, medicamento.id, ativas);
@@ -223,21 +232,17 @@ export default function DetalheMedicamentoScreen() {
           </Cartao>
 
           <Cartao>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <View style={{ gap: 2 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+              <View style={{ flex: 1, gap: 2 }}>
                 <CabecalhoSecao>Estoque</CabecalhoSecao>
-                <ThemedText numerico style={{ fontFamily: FAMILIA_TITULO[700], fontSize: 34, lineHeight: 40 }}>
-                  {medicamento.quantidadeEmEstoque}{' '}
-                  <ThemedText themeColor="textSecondary">{medicamento.quantidadeEmEstoque === 1 ? 'unidade' : 'unidades'}</ThemedText>
+                <ThemedText style={{ fontFamily: FAMILIA_TITULO[700], fontSize: 26, lineHeight: 32 }}>
+                  {textoEstoque(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem, ciclico)}
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary" numerico>
+                  {medicamento.quantidadeEmEstoque} {medicamento.quantidadeEmEstoque === 1 ? 'unidade' : 'unidades'} no total
                 </ThemedText>
               </View>
-              {estoqueBaixo ? (
-                <View style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: theme.statusPerdidaSoft }}>
-                  <ThemedText type="caption" style={{ color: theme.statusPerdida, fontFamily: FAMILIA_TEXTO[600] }}>
-                    Estoque baixo
-                  </ThemedText>
-                </View>
-              ) : null}
+              <SeloEstoque alerta={alertaSelo} />
             </View>
             <View style={{ gap: 6 }}>
               <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.surfaceMuted, overflow: 'hidden' }}>
@@ -255,9 +260,14 @@ export default function DetalheMedicamentoScreen() {
                   {textoPrevisao(previsao) ?? ''}
                 </ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Embalagem com {medicamento.quantidadePorEmbalagem}
+                  {ciclico ? 'Cartela' : 'Caixa'} com {medicamento.quantidadePorEmbalagem}
                 </ThemedText>
               </View>
+              {alerta?.tipo === 'sobra' ? (
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {textoAlertaEstoque(alerta)}
+                </ThemedText>
+              ) : null}
             </View>
             <Botao
               rotulo="Registrar compra"

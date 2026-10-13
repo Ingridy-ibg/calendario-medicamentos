@@ -160,7 +160,7 @@ describe('montarAgendaDoDia', () => {
     const esquemaId = inserirEsquema(db, { tipo: 'DIARIO', medicamentoId, horarios: ['08:00'] }).id;
     inserirDose(db, { esquemaId, dataHoraPrevista: new Date(2026, 7, 26, 8, 0) });
 
-    expect(montarAgendaDoDia(db, HOJE)[0]).toMatchObject({ alertaEstoque: true });
+    expect(montarAgendaDoDia(db, HOJE)[0]).toMatchObject({ alertaEstoque: { tipo: 'baixo' } });
   });
 
   it('curso de duração fixa já encerrado não aparece na agenda de hoje (8.3)', () => {
@@ -273,5 +273,32 @@ describe('montarAgendaDoDia — dose atrasada', () => {
     );
     expect(montarAgendaDoDia(db, new Date(2026, 9, 12, 8, 20))).toMatchObject([{ tipo: 'dose', status: 'pendente', atrasada: false }]);
     expect(montarAgendaDoDia(db, new Date(2026, 9, 12, 9))).toMatchObject([{ tipo: 'dose', status: 'pendente', atrasada: true }]);
+  });
+});
+
+describe('montarAgendaDoDia — alertas de estoque por tipo de uso', () => {
+  const cadastro = (quantidadeEmEstoque: number, esquema: Parameters<typeof cadastrarMedicamento>[1]['esquema']) => {
+    const db = createTestDb();
+    cadastrarMedicamento(
+      db,
+      { comuns: { nome: 'X', dosagem: '1', criticidade: 'comum', quantidadeEmEstoque, quantidadePorEmbalagem: 30 }, esquema },
+      new Date(2026, 9, 12, 7),
+    );
+    return montarAgendaDoDia(db, new Date(2026, 9, 12, 7, 30))[0];
+  };
+
+  it('tratamento de 5 dias 2×/dia (10 doses) com 8 unidades → insuficiente, faltam 2', () => {
+    const item = cadastro(8, { tipo: 'DIARIO', horarios: ['08:00', '20:00'], duracao: { modo: 'dias', dias: 5 } });
+    expect(item.alertaEstoque).toEqual({ tipo: 'insuficiente', faltam: 2 });
+  });
+
+  it('tratamento com sobra não mostra alerta na agenda', () => {
+    const item = cadastro(20, { tipo: 'DIARIO', horarios: ['08:00', '20:00'], duracao: { modo: 'dias', dias: 5 } });
+    expect(item.alertaEstoque).toBeNull();
+  });
+
+  it('"se necessário" com 4 unidades → alerta leve', () => {
+    const item = cadastro(4, { tipo: 'SE_NECESSARIO', limiteDiario: 3 });
+    expect(item).toMatchObject({ tipo: 'se_necessario', alertaEstoque: { tipo: 'baixo_leve' } });
   });
 });

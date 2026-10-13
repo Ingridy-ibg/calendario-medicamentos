@@ -25,6 +25,7 @@ import {
 import { ErroValidacao } from '@/domain/medication-registration/registration';
 import type { DadosEmUso, DadosFormularioMedicamento, EmUsoFormulario, ModoDuracao } from '@/domain/medication-registration/types';
 import type { ErrosValidacao } from '@/domain/medication-registration/validation';
+import { paraUnidades, textoEstoque } from '@/domain/medication-stock/caixas';
 import { useTheme } from '@/hooks/use-theme';
 import { Tocavel } from '@/components/ui/tocavel';
 
@@ -235,7 +236,8 @@ export function FormularioMedicamento({
   const [nome, setNome] = useState(valoresIniciais.nome);
   const [dosagem, setDosagem] = useState(valoresIniciais.dosagem);
   const [criticidade, setCriticidade] = useState<Criticidade>(valoresIniciais.criticidade);
-  const [quantidadeEmEstoque, setQuantidadeEmEstoque] = useState(valoresIniciais.quantidadeEmEstoque);
+  const [caixasFechadas, setCaixasFechadas] = useState(valoresIniciais.caixasFechadas);
+  const [naCaixaEmUso, setNaCaixaEmUso] = useState(valoresIniciais.naCaixaEmUso);
   const [quantidadePorEmbalagem, setQuantidadePorEmbalagem] = useState(valoresIniciais.quantidadePorEmbalagem);
 
   const [tipo, setTipo] = useState<TipoEsquema>(valoresIniciais.tipo);
@@ -297,7 +299,8 @@ export function FormularioMedicamento({
           nome,
           dosagem,
           criticidade,
-          quantidadeEmEstoque,
+          caixasFechadas,
+          naCaixaEmUso,
           quantidadePorEmbalagem,
           tipo,
           horarios,
@@ -319,6 +322,18 @@ export function FormularioMedicamento({
       throw erro;
     }
   }
+
+  // Prévia do total, enquanto os campos formam um estoque válido.
+  const totalEstoque = (() => {
+    const porCaixa = paraNumero(quantidadePorEmbalagem);
+    const fechadas = paraNumero(caixasFechadas);
+    const emUso = naCaixaEmUso.trim() ? paraNumero(naCaixaEmUso) : 0;
+    if (!caixasFechadas.trim() || !(porCaixa > 0) || !Number.isInteger(fechadas) || fechadas < 0 || !Number.isInteger(emUso) || emUso < 0 || emUso >= porCaixa) {
+      return null;
+    }
+    const unidades = paraUnidades({ caixasFechadas: fechadas, naCaixaEmUso: emUso, porCaixa });
+    return { unidades, texto: textoEstoque(unidades, porCaixa, tipo === 'CICLICO') };
+  })();
 
   const campoNumerico = (rotulo: string, valor: string, aoMudar: (v: string) => void, erro: string | undefined, placeholder: string) => (
     <CampoTexto
@@ -500,21 +515,21 @@ export function FormularioMedicamento({
             <SecaoFormulario titulo="Estoque">
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <View style={{ flex: 1 }}>
-                  {campoNumerico('Em casa agora', quantidadeEmEstoque, setQuantidadeEmEstoque, erros.quantidadeEmEstoque, '30')}
+                  {campoNumerico('Caixas fechadas', caixasFechadas, setCaixasFechadas, erros.caixasFechadas, '1')}
                 </View>
                 <View style={{ flex: 1 }}>
-                  {campoNumerico(
-                    'Por embalagem',
-                    quantidadePorEmbalagem,
-                    setQuantidadePorEmbalagem,
-                    erros.quantidadePorEmbalagem,
-                    '30',
-                  )}
+                  {campoNumerico('Na caixa em uso (opcional)', naCaixaEmUso, setNaCaixaEmUso, erros.naCaixaEmUso, '12')}
                 </View>
               </View>
+              {campoNumerico('Unidades por caixa', quantidadePorEmbalagem, setQuantidadePorEmbalagem, erros.quantidadePorEmbalagem, '30')}
+              {totalEstoque ? (
+                <ThemedText type="caption" themeColor="textSecondary" accessibilityLiveRegion="polite">
+                  Total: {totalEstoque.unidades} {totalEstoque.unidades === 1 ? 'unidade' : 'unidades'} · {totalEstoque.texto}
+                </ThemedText>
+              ) : null}
               <ThemedText type="caption" themeColor="textSecondary">
                 {modo === 'edicao'
-                  ? 'Mudar "Em casa agora" corrige a contagem. Para somar uma compra, use "Registrar compra" no detalhe.'
+                  ? 'Mudar as caixas corrige a contagem. Para somar uma compra, use "Registrar compra" no detalhe.'
                   : 'Avisamos quando estiver perto de acabar.'}
               </ThemedText>
             </SecaoFormulario>
