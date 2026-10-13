@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { AjudaTiposEsquema } from '@/components/medicamento/ajuda-tipos-esquema';
 import { ESTADO_INICIO_PADRAO, type EstadoInicio, SecaoInicio } from '@/components/medicamento/secao-inicio';
 import { Botao } from '@/components/ui/botao';
 import { CabecalhoSecao } from '@/components/ui/cabecalho-secao';
@@ -78,10 +79,17 @@ function abrirSeletorDeHorario(aoSelecionar: (horario: string) => void) {
   });
 }
 
-function SecaoFormulario({ titulo, children }: { titulo: string; children: ReactNode }) {
+function SecaoFormulario({ titulo, acao, children }: { titulo: string; acao?: ReactNode; children: ReactNode }) {
   return (
     <Cartao style={{ gap: 14 }}>
-      <CabecalhoSecao>{titulo}</CabecalhoSecao>
+      {acao ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: -12 }}>
+          <CabecalhoSecao>{titulo}</CabecalhoSecao>
+          {acao}
+        </View>
+      ) : (
+        <CabecalhoSecao>{titulo}</CabecalhoSecao>
+      )}
       {children}
     </Cartao>
   );
@@ -241,6 +249,7 @@ export function FormularioMedicamento({
   const [quantidadePorEmbalagem, setQuantidadePorEmbalagem] = useState(valoresIniciais.quantidadePorEmbalagem);
 
   const [tipo, setTipo] = useState<TipoEsquema>(valoresIniciais.tipo);
+  const [ajudaTiposVisivel, setAjudaTiposVisivel] = useState(false);
   const [horarios, setHorarios] = useState<string[]>(valoresIniciais.horarios);
   const [duracao, setDuracao] = useState<ModoDuracao>(valoresIniciais.duracao);
   const [intervaloHoras, setIntervaloHoras] = useState(valoresIniciais.intervaloHoras);
@@ -383,7 +392,22 @@ export function FormularioMedicamento({
               <CampoTexto rotulo="Dosagem" erro={erros.dosagem} value={dosagem} onChangeText={setDosagem} placeholder="Ex.: 50 mg" />
             </SecaoFormulario>
 
-            <SecaoFormulario titulo="Como tomar">
+            <SecaoFormulario
+              titulo="Como tomar"
+              acao={
+                <Tocavel
+                  accessibilityRole="button"
+                  accessibilityLabel="O que é cada tipo de esquema?"
+                  onPress={() => setAjudaTiposVisivel(true)}
+                  style={{ width: 44, height: 44, marginRight: -10, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icone nome="info" cor={theme.accent} tamanho={24} />
+                </Tocavel>
+              }>
+              <AjudaTiposEsquema
+                visivel={ajudaTiposVisivel}
+                tipoInicial={tipo}
+                aoFechar={() => setAjudaTiposVisivel(false)}
+              />
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {TIPOS_ESQUEMA.map((opcao) => (
                   <Chip

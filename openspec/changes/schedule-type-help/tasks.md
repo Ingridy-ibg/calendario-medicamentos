@@ -1,10 +1,10 @@
 ## 1. Conteúdo
 
-- [ ] 1.1 Criar `src/constants/tipos-esquema.ts` com título, descrição, exemplo e pontos de cada tipo (textos do artboard "Info — tipos de esquema"); verificar com teste que todo `TipoEsquema` tem conteúdo, na ordem de `TIPOS_ESQUEMA`.
+- [x] 1.1 Criar `src/constants/tipos-esquema.ts` com título, descrição, exemplo e pontos de cada tipo (textos do artboard "Info — tipos de esquema"); verificar com teste que todo `TipoEsquema` tem conteúdo, na ordem de `TIPOS_ESQUEMA`.
 
 ## 2. Modal
 
-- [ ] 2.1 Criar `src/components/medicamento/ajuda-tipos-esquema.tsx` (Modal transparente, fundo tocável que fecha, `onRequestClose`, carrossel com setas e bolinhas acessíveis, ilustração por tipo) conforme o artboard; verificar com `npx tsc --noEmit` e o teste de varredura de `Pressable` passando.
+- [x] 2.1 Criar `src/components/medicamento/ajuda-tipos-esquema.tsx` (Modal transparente, fundo tocável que fecha, `onRequestClose`, carrossel com setas e bolinhas acessíveis, ilustração por tipo) conforme o artboard; verificar com `npx tsc --noEmit` e o teste de varredura de `Pressable` passando.
 
 ## 3. Formulário
 
