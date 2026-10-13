@@ -17,7 +17,25 @@ export type DadosEsquemaFormulario =
   | { tipo: 'CICLICO'; diasAtivos: number; diasPausa: number; horario: string }
   | { tipo: 'SE_NECESSARIO'; limiteDiario: number };
 
+/** Respostas de "Já estava tomando" conforme o tipo (register-ongoing-medication). */
+export type DadosEmUso =
+  /** Diário / dias da semana com duração fixa. */
+  | { tipo: 'inicio'; dataInicio: Date }
+  /** A cada X horas: última dose e, com duração fixa, o início. */
+  | { tipo: 'intervalo'; ultimaDose: Date; dataInicio?: Date }
+  /** Cíclico: dia atual da cartela ou da pausa. */
+  | { tipo: 'ciclo'; fase: 'ativo' | 'pausa'; dia: number };
+
+export interface EmUsoFormulario {
+  /** Ausente para diário/dias da semana de uso contínuo (nada a perguntar além de hoje). */
+  dados?: DadosEmUso;
+  /** Horários de hoje ("HH:mm") já passados que o usuário marcou como tomados. */
+  dosesDeHojeTomadas: string[];
+}
+
 export interface DadosFormularioMedicamento {
   comuns: CamposComunsFormulario;
   esquema: DadosEsquemaFormulario;
+  /** Presente quando "Já estava tomando" está ligado. */
+  emUso?: EmUsoFormulario;
 }

@@ -15,6 +15,13 @@
       "when": 1787970439336,
       "tag": "0001_next_warbound",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791863984399,
+      "tag": "0002_dizzy_charles_xavier",
+      "breakpoints": true
     }
   ]
 }

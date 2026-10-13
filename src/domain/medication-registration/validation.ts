@@ -1,3 +1,5 @@
+import { differenceInCalendarDays, startOfDay } from 'date-fns';
+
 import type { CamposComunsFormulario, DadosEsquemaFormulario, DadosFormularioMedicamento, ModoDuracao } from './types';
 
 export type ErrosValidacao = Record<string, string>;
@@ -77,4 +79,38 @@ export function validarEsquema(esquema: DadosEsquemaFormulario): ErrosValidacao 
 
 export function validarFormulario(dados: DadosFormularioMedicamento): ErrosValidacao {
   return { ...validarCamposComuns(dados.comuns), ...validarEsquema(dados.esquema) };
+}
+
+/**
+ * Respostas de "Já estava tomando" (specs/medication-registration de
+ * register-ongoing-medication): início no futuro, tratamento já encerrado,
+ * última dose no futuro e dia da cartela/pausa fora da faixa.
+ */
+export function validarEmUso(dados: DadosFormularioMedicamento, agora: Date): ErrosValidacao {
+  const emUso = dados.emUso?.dados;
+  if (!emUso) return {};
+  const erros: ErrosValidacao = {};
+  const { esquema } = dados;
+
+  const inicio = emUso.tipo === 'inicio' ? emUso.dataInicio : emUso.tipo === 'intervalo' ? emUso.dataInicio : undefined;
+  if (inicio) {
+    if (startOfDay(inicio) > startOfDay(agora)) {
+      erros.dataInicio = 'A data de início não pode ser no futuro.';
+    } else if ('duracao' in esquema && esquema.duracao.modo === 'dias' && differenceInCalendarDays(agora, inicio) >= esquema.duracao.dias) {
+      erros.dataInicio = 'Esse tratamento já terminou.';
+    }
+  }
+
+  if (emUso.tipo === 'intervalo' && emUso.ultimaDose > agora) {
+    erros.ultimaDose = 'A última dose não pode ser no futuro.';
+  }
+
+  if (emUso.tipo === 'ciclo' && esquema.tipo === 'CICLICO') {
+    const limite = emUso.fase === 'ativo' ? esquema.diasAtivos : esquema.diasPausa;
+    if (!Number.isInteger(emUso.dia) || emUso.dia < 1 || emUso.dia > limite) {
+      erros.diaCiclo = `Informe um dia entre 1 e ${limite}.`;
+    }
+  }
+
+  return erros;
 }

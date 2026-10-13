@@ -1,6 +1,12 @@
-import { addHours } from 'date-fns';
+import { addHours, isSameDay } from 'date-fns';
 
-import { inserirDose, substituirDosesFuturas } from '@/db/repositories/doses';
+import {
+  apagarDoseNaoResolvida,
+  inserirDose,
+  listarDosesPorEsquema,
+  resolverDose,
+  substituirDosesFuturas,
+} from '@/db/repositories/doses';
 import {
   atualizarEsquema,
   buscarEsquemaPorId,
@@ -23,7 +29,8 @@ import { gerarPrimeiraDoseIntervalo } from '@/domain/dose-scheduling/intervalo-h
 import { materializarJanela, rematerializarJanelaAposEdicao } from '@/domain/dose-scheduling/janela-rolante';
 
 import type { DadosEsquemaFormulario, DadosFormularioMedicamento, ModoDuracao } from './types';
-import { validarEsquema, validarFormulario } from './validation';
+import { montarPreviaCadastro, type PlanoCadastro } from './previa';
+import { validarEmUso, validarEsquema, validarFormulario } from './validation';
 
 export class ErroValidacao extends Error {
   constructor(public readonly erros: Record<string, string>) {
@@ -42,7 +49,11 @@ function duracaoParaDias(duracao: ModoDuracao): number | null {
  * a primeira dose é confirmada explicitamente (ver specs/dose-scheduling e
  * o Open Question correspondente em design.md).
  */
-function paraNovoEsquema(medicamentoId: string, esquema: DadosEsquemaFormulario): NovoEsquema {
+function paraNovoEsquema(
+  medicamentoId: string,
+  esquema: DadosEsquemaFormulario,
+  plano: Pick<PlanoCadastro, 'dataInicio' | 'dataInicioCiclo'> = { dataInicio: null, dataInicioCiclo: null },
+): NovoEsquema {
   switch (esquema.tipo) {
     case 'DIARIO':
       return {
@@ -50,6 +61,7 @@ function paraNovoEsquema(medicamentoId: string, esquema: DadosEsquemaFormulario)
         medicamentoId,
         horarios: esquema.horarios,
         duracaoDias: duracaoParaDias(esquema.duracao),
+        dataInicio: plano.dataInicio,
       };
     case 'INTERVALO_HORAS':
       return {
@@ -57,6 +69,7 @@ function paraNovoEsquema(medicamentoId: string, esquema: DadosEsquemaFormulario)
         medicamentoId,
         intervaloHoras: esquema.intervaloHoras,
         duracaoDias: duracaoParaDias(esquema.duracao),
+        dataInicio: plano.dataInicio,
       };
     case 'DIAS_SEMANA':
       return {
@@ -65,6 +78,7 @@ function paraNovoEsquema(medicamentoId: string, esquema: DadosEsquemaFormulario)
         diasDaSemana: esquema.diasDaSemana,
         horarios: esquema.horarios,
         duracaoDias: duracaoParaDias(esquema.duracao),
+        dataInicio: plano.dataInicio,
       };
     case 'CICLICO':
       return {
@@ -72,7 +86,7 @@ function paraNovoEsquema(medicamentoId: string, esquema: DadosEsquemaFormulario)
         medicamentoId,
         diasAtivos: esquema.diasAtivos,
         diasPausa: esquema.diasPausa,
-        dataInicioCiclo: null,
+        dataInicioCiclo: plano.dataInicioCiclo,
         horarios: [esquema.horario],
       };
     case 'SE_NECESSARIO':
@@ -80,22 +94,41 @@ function paraNovoEsquema(medicamentoId: string, esquema: DadosEsquemaFormulario)
   }
 }
 
-/** Materializa a(s) primeira(s) dose(s) de um esquema recém-criado, conforme seu tipo. */
-function materializarDosesIniciais(db: AppDb, esquemaRow: EsquemaRow, agora: Date) {
+/**
+ * Materializa as primeiras doses de um esquema recém-criado conforme o plano
+ * da prévia (register-ongoing-medication): doses de hoje de horário já
+ * passado só ficam se informadas como tomadas — aí entram no histórico como
+ * tomadas, sem descontar estoque (o estoque informado já é o de agora).
+ */
+function materializarDosesIniciais(db: AppDb, esquemaRow: EsquemaRow, plano: PlanoCadastro, agora: Date) {
   const dominio = paraEsquemaDominio(esquemaRow);
+  const tomadasHoje = new Set(plano.dosesTomadasHoje.map((data) => data.getTime()));
+
   switch (dominio.tipo) {
     case 'DIARIO':
     case 'DIAS_SEMANA':
+    case 'CICLICO': {
+      // Cíclico sem âncora fica aguardando a nova cartela: nada a gerar.
       materializarJanela(db, dominio, agora);
-      return;
-    case 'INTERVALO_HORAS': {
-      const primeira = gerarPrimeiraDoseIntervalo(dominio);
-      inserirDose(db, { esquemaId: dominio.id, dataHoraPrevista: primeira.dataHoraPrevista });
+      for (const dose of listarDosesPorEsquema(db, dominio.id)) {
+        if (!dose.dataHoraPrevista || !isSameDay(dose.dataHoraPrevista, agora) || dose.dataHoraPrevista > agora) continue;
+        if (tomadasHoje.has(dose.dataHoraPrevista.getTime())) {
+          resolverDose(db, dose.id, { status: 'tomada', dataHoraRegistro: dose.dataHoraPrevista });
+        } else {
+          apagarDoseNaoResolvida(db, dose.id);
+        }
+      }
       return;
     }
-    case 'CICLICO':
-      // Em espera até a primeira confirmação — nada a materializar ainda.
+    case 'INTERVALO_HORAS': {
+      for (const tomada of plano.dosesTomadasHoje) {
+        const dose = inserirDose(db, { esquemaId: dominio.id, dataHoraPrevista: tomada });
+        resolverDose(db, dose.id, { status: 'tomada', dataHoraRegistro: tomada });
+      }
+      const primeira = gerarPrimeiraDoseIntervalo(dominio, { agora });
+      inserirDose(db, { esquemaId: dominio.id, dataHoraPrevista: plano.primeiraDoseIntervalo ?? primeira.dataHoraPrevista });
       return;
+    }
     case 'SE_NECESSARIO':
       // Nunca pré-gera doses.
       return;
@@ -107,22 +140,34 @@ function materializarDosesIniciais(db: AppDb, esquemaRow: EsquemaRow, agora: Dat
  * iniciais. Lança `ErroValidacao` se os dados não passarem na validação
  * (specs/medication-registration).
  */
-export function cadastrarMedicamento(db: AppDb, dados: DadosFormularioMedicamento, agora: Date) {
-  const erros = validarFormulario(dados);
+/**
+ * Valida o cadastro sem gravar e devolve a prévia para "Confira antes de
+ * salvar". Lança `ErroValidacao` com os erros dos campos.
+ */
+export function prepararCadastro(dados: DadosFormularioMedicamento, agora: Date) {
+  const erros = { ...validarFormulario(dados), ...validarEmUso(dados, agora) };
   if (Object.keys(erros).length > 0) {
     throw new ErroValidacao(erros);
   }
+  return montarPreviaCadastro(dados, agora);
+}
+
+export function cadastrarMedicamento(db: AppDb, dados: DadosFormularioMedicamento, agora: Date) {
+  prepararCadastro(dados, agora);
+
+  // A mesma prévia que a tela de confirmação mostra decide o que é gravado.
+  const previa = montarPreviaCadastro(dados, agora);
 
   // Medicamentos cíclicos são sempre especiais, independentemente do valor
   // selecionado pelo usuário no controle de criticidade.
   const criticidade = dados.esquema.tipo === 'CICLICO' ? 'especial' : dados.comuns.criticidade;
 
-  const medicamento = inserirMedicamento(db, { ...dados.comuns, criticidade }, agora);
-  const esquema = inserirEsquema(db, paraNovoEsquema(medicamento.id, dados.esquema), agora);
-
-  materializarDosesIniciais(db, buscarEsquemaPorId(db, esquema.id)!, agora);
-
-  return { medicamento, esquema };
+  return db.transaction((tx) => {
+    const medicamento = inserirMedicamento(tx, { ...dados.comuns, criticidade }, agora);
+    const esquema = inserirEsquema(tx, paraNovoEsquema(medicamento.id, dados.esquema, previa.plano), agora);
+    materializarDosesIniciais(tx, buscarEsquemaPorId(tx, esquema.id)!, previa.plano, agora);
+    return { medicamento, esquema, previa };
+  });
 }
 
 /**

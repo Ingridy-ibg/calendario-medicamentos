@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ESTADO_INICIO_PADRAO, type EstadoInicio, SecaoInicio } from '@/components/medicamento/secao-inicio';
 import { Botao } from '@/components/ui/botao';
 import { CabecalhoSecao } from '@/components/ui/cabecalho-secao';
 import { Campo, CampoTexto } from '@/components/ui/campo-texto';
@@ -22,7 +23,7 @@ import {
   type ValoresFormulario,
 } from '@/domain/medication-registration/formulario';
 import { ErroValidacao } from '@/domain/medication-registration/registration';
-import type { DadosFormularioMedicamento, ModoDuracao } from '@/domain/medication-registration/types';
+import type { DadosEmUso, DadosFormularioMedicamento, EmUsoFormulario, ModoDuracao } from '@/domain/medication-registration/types';
 import type { ErrosValidacao } from '@/domain/medication-registration/validation';
 import { useTheme } from '@/hooks/use-theme';
 import { Tocavel } from '@/components/ui/tocavel';
@@ -250,11 +251,49 @@ export function FormularioMedicamento({
   const [erros, setErros] = useState<ErrosValidacao>({});
 
   const criticidadeAtual = criticidadeEfetiva({ tipo, criticidade });
+  const [inicio, setInicio] = useState<EstadoInicio>(ESTADO_INICIO_PADRAO);
+  const comDuracao = duracao.modo === 'dias' && duracao.dias > 0;
+
+  // Horários de hoje que já passaram — só para eles se pergunta "Já tomou?".
+  const agoraHHmm = formatarHorario(new Date());
+  const horariosDeHojePassados = (() => {
+    if (tipo === 'DIARIO') return horarios.filter((h) => h <= agoraHHmm);
+    if (tipo === 'DIAS_SEMANA') return diasDaSemana.includes(new Date().getDay()) ? horarios.filter((h) => h <= agoraHHmm) : [];
+    if (tipo === 'CICLICO') return horarioCiclico && horarioCiclico <= agoraHHmm ? [horarioCiclico] : [];
+    return [];
+  })();
+
+  /** Respostas de "Já estava tomando"; campos obrigatórios faltando viram erro no campo. */
+  function montarEmUso(): EmUsoFormulario | undefined {
+    if (modo !== 'cadastro' || !inicio.emUso || tipo === 'SE_NECESSARIO') return undefined;
+    const faltando: ErrosValidacao = {};
+    const tomadas = inicio.tomadasHoje.filter((h) => horariosDeHojePassados.includes(h));
+    let dados: DadosEmUso | undefined;
+
+    if (tipo === 'CICLICO') {
+      if (!inicio.diaCiclo.trim()) faltando.diaCiclo = 'Informe o dia de hoje na cartela.';
+      dados = { tipo: 'ciclo', fase: inicio.faseCiclo, dia: Number(inicio.diaCiclo) };
+    } else if (tipo === 'INTERVALO_HORAS') {
+      if (!inicio.ultimaDose) faltando.ultimaDose = 'Informe quando foi a última dose.';
+      if (comDuracao && !inicio.dataInicio) faltando.dataInicio = 'Informe quando o tratamento começou.';
+      dados = inicio.ultimaDose
+        ? { tipo: 'intervalo', ultimaDose: inicio.ultimaDose, dataInicio: comDuracao ? (inicio.dataInicio ?? undefined) : undefined }
+        : undefined;
+    } else if (comDuracao) {
+      if (!inicio.dataInicio) faltando.dataInicio = 'Informe quando o tratamento começou.';
+      dados = inicio.dataInicio ? { tipo: 'inicio', dataInicio: inicio.dataInicio } : undefined;
+    }
+
+    if (Object.keys(faltando).length > 0) throw new ErroValidacao(faltando);
+    return { dados, dosesDeHojeTomadas: tipo === 'CICLICO' && inicio.faseCiclo === 'pausa' ? [] : tomadas };
+  }
 
   function enviar() {
     try {
-      aoSalvar(
-        paraDadosFormulario({
+      const emUso = montarEmUso();
+      aoSalvar({
+        emUso,
+        ...paraDadosFormulario({
           nome,
           dosagem,
           criticidade,
@@ -270,7 +309,7 @@ export function FormularioMedicamento({
           horarioCiclico,
           limiteDiario,
         }),
-      );
+      });
       setErros({});
     } catch (erro) {
       if (erro instanceof ErroValidacao) {
@@ -498,6 +537,18 @@ export function FormularioMedicamento({
                 </ThemedText>
               ) : null}
             </SecaoFormulario>
+            {modo === 'cadastro' && tipo !== 'SE_NECESSARIO' ? (
+              <SecaoInicio
+                tipo={tipo}
+                duracao={duracao}
+                diasAtivos={Number(diasAtivos) || 0}
+                diasPausa={Number(diasPausa) || 0}
+                horariosDeHojePassados={horariosDeHojePassados}
+                estado={inicio}
+                aoMudar={setInicio}
+                erros={erros}
+              />
+            ) : null}
           </ScrollView>
 
           <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, backgroundColor: theme.background }}>

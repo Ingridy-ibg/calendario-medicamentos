@@ -109,6 +109,7 @@ export default function RootLayout() {
         <Stack.Protected guard={boasVindasConcluida}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="medicamento/novo" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="medicamento/confirmar" options={{ presentation: 'modal' }} />
           <Stack.Screen name="medicamento/[id]/index" />
           <Stack.Screen name="medicamento/[id]/editar" options={{ presentation: 'modal' }} />
           <Stack.Screen

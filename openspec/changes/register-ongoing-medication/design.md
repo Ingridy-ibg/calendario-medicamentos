@@ -72,6 +72,10 @@ A tela de confirmação recebe o mesmo `dados` e o mesmo `agora` (capturado ao t
 
 No `FormularioMedicamento` (da `manage-medications`): seção "Início" com o interruptor e as perguntas por tipo, conforme o artboard; o botão final vira "Continuar". Em modo edição a seção não aparece (Non-Goals).
 
+### Nota da implementação: sem a dica "28/0"
+
+O artboard sugeria "Cartela com 28 comprimidos e sem pausa? Cadastre como 28/0", mas o cadastro exige dias de pausa > 0 (regra da `add-medication-scheduling`). Decidido com o usuário: manter a regra e não mostrar a dica.
+
 ## Risks / Trade-offs
 
 - [Usuário informa o dia da cartela errado] → a confirmação mostra datas concretas (último comprimido, pausa, nova cartela) para ele perceber; corrigir depois exige remover e recadastrar até existir edição de posição (Non-Goals).

@@ -59,6 +59,9 @@ export const esquemas = sqliteTable('esquemas', {
   dataInicioCiclo: integer('data_inicio_ciclo', { mode: 'timestamp_ms' }),
   // DIARIO, INTERVALO_HORAS, DIAS_SEMANA: null = uso contínuo.
   duracaoDias: integer('duracao_dias'),
+  // Dia 1 do tratamento, para contar `duracaoDias` quando o medicamento já
+  // estava em uso antes do cadastro; null = começou no cadastro (`createdAt`).
+  dataInicio: integer('data_inicio', { mode: 'timestamp_ms' }),
   // SE_NECESSARIO
   limiteDiario: integer('limite_diario'),
 

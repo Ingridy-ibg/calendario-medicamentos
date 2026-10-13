@@ -272,3 +272,10 @@ export function substituirDosesAPartirDe(db: AppDb, esquemaId: string, corte: Da
 
   return novasDoses.filter((dose) => dose.dataHoraPrevista && dose.dataHoraPrevista > corte).map((dose) => inserirDose(db, dose));
 }
+
+/** Apaga uma dose não resolvida (ex.: horário de hoje já passado no cadastro, não tomado). */
+export function apagarDoseNaoResolvida(db: AppDb, id: string) {
+  db.delete(doses)
+    .where(and(eq(doses.id, id), inArray(doses.status, STATUS_NAO_RESOLVIDOS)))
+    .run();
+}

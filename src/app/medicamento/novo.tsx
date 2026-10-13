@@ -1,20 +1,23 @@
 import { router } from 'expo-router';
 
 import { FormularioMedicamento } from '@/components/medicamento/formulario-medicamento';
-import { db } from '@/db/client';
-import { cadastrarMedicamento } from '@/domain/medication-registration/registration';
-import { aposSalvarMedicamento } from '@/lib/apos-salvar-medicamento';
+import { prepararCadastro } from '@/domain/medication-registration/registration';
+import { useCadastroStore } from '@/state/cadastro-store';
 
+/**
+ * Cadastro: "Continuar" valida e leva a "Confira antes de salvar"; nada é
+ * gravado aqui (register-ongoing-medication).
+ */
 export default function NovoMedicamentoScreen() {
+  const definir = useCadastroStore((estado) => estado.definir);
   return (
     <FormularioMedicamento
       modo="cadastro"
       titulo="Novo medicamento"
-      rotuloSalvar="Salvar medicamento"
+      rotuloSalvar="Continuar"
       aoSalvar={(dados) => {
-        cadastrarMedicamento(db, dados, new Date());
-        aposSalvarMedicamento(dados.comuns.criticidade);
-        router.back();
+        definir(dados, prepararCadastro(dados, new Date()));
+        router.push('/medicamento/confirmar');
       }}
     />
   );

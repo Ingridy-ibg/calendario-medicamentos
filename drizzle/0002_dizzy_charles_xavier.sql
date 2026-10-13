@@ -1,0 +1,1 @@
+ALTER TABLE `esquemas` ADD `data_inicio` integer;

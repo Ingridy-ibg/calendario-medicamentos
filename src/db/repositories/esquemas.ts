@@ -9,6 +9,8 @@ import type { AppDb } from './types';
 interface CamposComuns {
   medicamentoId: string;
   duracaoDias?: number | null;
+  /** Dia 1 do tratamento quando já estava em uso antes do cadastro; ausente = `createdAt`. */
+  dataInicio?: Date | null;
 }
 
 export type NovoEsquema =
@@ -42,6 +44,7 @@ export function inserirEsquema(db: AppDb, dados: NovoEsquema, agora: Date = new 
     diasPausa: null as number | null,
     dataInicioCiclo: null as Date | null,
     duracaoDias: null as number | null,
+    dataInicio: null as Date | null,
     limiteDiario: null as number | null,
     createdAt: agora,
     updatedAt: agora,
@@ -51,15 +54,21 @@ export function inserirEsquema(db: AppDb, dados: NovoEsquema, agora: Date = new 
   const registro = (() => {
     switch (dados.tipo) {
       case 'DIARIO':
-        return { ...base, horarios: dados.horarios, duracaoDias: dados.duracaoDias ?? null };
+        return { ...base, horarios: dados.horarios, duracaoDias: dados.duracaoDias ?? null, dataInicio: dados.dataInicio ?? null };
       case 'INTERVALO_HORAS':
-        return { ...base, intervaloHoras: dados.intervaloHoras, duracaoDias: dados.duracaoDias ?? null };
+        return {
+          ...base,
+          intervaloHoras: dados.intervaloHoras,
+          duracaoDias: dados.duracaoDias ?? null,
+          dataInicio: dados.dataInicio ?? null,
+        };
       case 'DIAS_SEMANA':
         return {
           ...base,
           diasDaSemana: dados.diasDaSemana,
           horarios: dados.horarios,
           duracaoDias: dados.duracaoDias ?? null,
+          dataInicio: dados.dataInicio ?? null,
         };
       case 'CICLICO':
         return {
@@ -158,7 +167,8 @@ export function removerEsquema(db: AppDb, id: string, agora: Date) {
 /**
  * Converte uma linha do banco para o tipo de domínio usado pelo motor de
  * agendamento (`src/domain/dose-scheduling`). `dataInicio` (dia 1 do curso,
- * usado só para contar duração) é a própria `createdAt` do esquema — ver
+ * usado só para contar duração) é `data_inicio` quando informado no cadastro
+ * em uso, senão a própria `createdAt` do esquema — ver
  * decisão em `src/domain/dose-scheduling/types.ts`.
  */
 export function paraEsquemaDominio(linha: EsquemaRow): Esquema {
@@ -170,7 +180,7 @@ export function paraEsquemaDominio(linha: EsquemaRow): Esquema {
         tipo: 'DIARIO',
         horarios: linha.horarios ?? [],
         duracaoDias: linha.duracaoDias,
-        dataInicio: linha.createdAt,
+        dataInicio: linha.dataInicio ?? linha.createdAt,
       };
     case 'INTERVALO_HORAS':
       return {
@@ -179,7 +189,7 @@ export function paraEsquemaDominio(linha: EsquemaRow): Esquema {
         tipo: 'INTERVALO_HORAS',
         intervaloHoras: linha.intervaloHoras ?? 0,
         duracaoDias: linha.duracaoDias,
-        dataInicio: linha.createdAt,
+        dataInicio: linha.dataInicio ?? linha.createdAt,
       };
     case 'DIAS_SEMANA':
       return {
@@ -189,7 +199,7 @@ export function paraEsquemaDominio(linha: EsquemaRow): Esquema {
         diasDaSemana: linha.diasDaSemana ?? [],
         horarios: linha.horarios ?? [],
         duracaoDias: linha.duracaoDias,
-        dataInicio: linha.createdAt,
+        dataInicio: linha.dataInicio ?? linha.createdAt,
       };
     case 'CICLICO':
       return {

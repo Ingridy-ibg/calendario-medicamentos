@@ -39,7 +39,18 @@ export function gerarProximaDoseIntervalo(
   return { dataHoraPrevista };
 }
 
-/** Primeira dose de um esquema INTERVALO_HORAS recém-criado: âncora é o próprio início de vigência. */
-export function gerarPrimeiraDoseIntervalo(esquema: EsquemaIntervaloHoras): DoseGerada {
-  return { dataHoraPrevista: esquema.dataInicio };
+/**
+ * Primeira dose de um esquema INTERVALO_HORAS recém-criado. Sem `ultimaDose`
+ * é o momento do cadastro; com a última dose informada no cadastro em uso
+ * (register-ongoing-medication) é `ultimaDose + intervalo`, ou o próprio
+ * cadastro se esse horário já passou.
+ */
+export function gerarPrimeiraDoseIntervalo(
+  esquema: EsquemaIntervaloHoras,
+  opcoes: { agora?: Date; ultimaDose?: Date | null } = {},
+): DoseGerada {
+  const agora = opcoes.agora ?? esquema.dataInicio;
+  if (!opcoes.ultimaDose) return { dataHoraPrevista: agora };
+  const prevista = addHours(opcoes.ultimaDose, esquema.intervaloHoras);
+  return { dataHoraPrevista: prevista > agora ? prevista : agora };
 }
