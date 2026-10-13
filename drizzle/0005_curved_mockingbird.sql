@@ -1,0 +1,1 @@
+ALTER TABLE `esquemas` ADD `inicio_cartela_previsto` integer;

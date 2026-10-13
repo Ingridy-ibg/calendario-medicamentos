@@ -8,6 +8,7 @@ import { buscarDosePorId } from '@/db/repositories/doses';
 import type { AppDb } from '@/db/repositories/types';
 import { analisarIdentificador, type AlvoNotificacao } from '@/domain/dose-notifications/reconciliador';
 import { CANAIS_NOTIFICACAO, canalParaDose } from '@/domain/dose-notifications/types';
+import { ehInicioDeCartelaPendente } from '@/domain/dose-scheduling/ciclico';
 
 import { buscarContextoDaDose, buscarMedicamentoDoEsquema } from './contexto';
 import { conteudoDose, conteudoLembretePausa } from './conteudo';
@@ -41,6 +42,7 @@ export async function agendarAlvo(db: AppDb, alvo: AlvoNotificacao): Promise<voi
         dosagem: contexto.medicamento.dosagem,
         criticidade: contexto.medicamento.criticidade,
         notificacoesSemResposta: dose.notificacoesSemResposta,
+        inicioDeCartela: contexto.esquema.tipo === 'CICLICO' && ehInicioDeCartelaPendente(contexto.esquema, dose),
       }),
       trigger: {
         type: SchedulableTriggerInputTypes.DATE,

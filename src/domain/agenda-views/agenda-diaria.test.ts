@@ -10,7 +10,7 @@ import { confirmarNovaCartelaCiclica } from '@/domain/dose-scheduling/resolucao'
 import { cadastrarMedicamento } from '@/domain/medication-registration/registration';
 import type { EsquemaCiclico, EsquemaDiario } from '@/domain/dose-scheduling/types';
 
-import { montarAgendaDoDia } from './agenda-diaria';
+import { montarAgendaDoDia, textoInicioPrevisto } from './agenda-diaria';
 import { agruparPorPeriodo, resumirDia } from './resumo-dia';
 
 const HOJE = new Date(2026, 7, 26, 7, 0); // 26/08/2026, quarta-feira
@@ -227,13 +227,57 @@ describe('montarAgendaDoDia — cíclico aguardando nova cartela', () => {
     return paraEsquemaDominio(buscarEsquemaPorId(db, id)!) as EsquemaCiclico;
   }
 
-  it('recém-cadastrado aparece como aguardando, na noite, sem contar no resumo', () => {
+  it('recém-cadastrado às 21:00: aguardando "hoje às 22:00", na noite, sem item de dose duplicado', () => {
     const db = createTestDb();
     cadastrarCiclico(db);
     const agenda = montarAgendaDoDia(db, cadastro);
-    expect(agenda).toMatchObject([{ tipo: 'aguardando_cartela', nome: 'Anticoncepcional' }]);
+    expect(agenda).toEqual([
+      expect.objectContaining({
+        tipo: 'aguardando_cartela',
+        nome: 'Anticoncepcional',
+        inicioPrevisto: new Date(2026, 9, 12, 22, 0),
+        atrasada: false,
+        inicioHoje: true,
+      }),
+    ]);
     expect(agruparPorPeriodo(agenda).map((s) => s.chave)).toEqual(['noite']);
+  });
+
+  it('o início de cartela de hoje conta no resumo como dose agendada e é a próxima', () => {
+    const db = createTestDb();
+    cadastrarCiclico(db);
+    const resumo = resumirDia(montarAgendaDoDia(db, cadastro));
+    expect(resumo).toMatchObject({ total: 1, tomadas: 0, marcas: ['pendente'], concluido: false });
+    expect(resumo.proxima).toMatchObject({ tipo: 'aguardando_cartela', nome: 'Anticoncepcional' });
+  });
+
+  it('cadastrado às 23:00 com "Começo amanhã": aguardando "amanhã às 22:00", fora do resumo de hoje', () => {
+    const db = createTestDb();
+    const agora = new Date(2026, 9, 12, 23, 0);
+    cadastrarMedicamento(
+      db,
+      { comuns, esquema: { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '22:00' }, inicioCartela: 'amanha' },
+      agora,
+    );
+    const agenda = montarAgendaDoDia(db, agora);
+    expect(agenda).toEqual([
+      expect.objectContaining({ tipo: 'aguardando_cartela', inicioPrevisto: new Date(2026, 9, 13, 22, 0), inicioHoje: false, atrasada: false }),
+    ]);
     expect(resumirDia(agenda).total).toBe(0);
+  });
+
+  it('início de 09/11 não confirmado: em 11/11 aparece atrasado desde 09/11, uma vez só', () => {
+    const db = createTestDb();
+    const esquemaId = cadastrarCiclico(db);
+    // Ciclo iniciado em 12/10: pausa até 08/11, nova cartela prevista em 09/11 às 22:00.
+    confirmarNovaCartelaCiclica(db, esquemaDoBanco(db, esquemaId), new Date(2026, 9, 12, 22, 5));
+    const hoje = new Date(2026, 10, 11, 9, 0);
+    materializarJanela(db, esquemaDoBanco(db, esquemaId), new Date(2026, 10, 9, 8));
+
+    const agenda = montarAgendaDoDia(db, hoje);
+    expect(agenda).toEqual([
+      expect.objectContaining({ tipo: 'aguardando_cartela', inicioPrevisto: new Date(2026, 10, 9, 22, 0), atrasada: true, inicioHoje: false }),
+    ]);
   });
 
   it('iniciar a cartela: dose de hoje tomada (dia 1), estoque −1, dose de amanhã prevista e sem item aguardando', () => {
@@ -300,5 +344,16 @@ describe('montarAgendaDoDia — alertas de estoque por tipo de uso', () => {
   it('"se necessário" com 4 unidades → alerta leve', () => {
     const item = cadastro(4, { tipo: 'SE_NECESSARIO', limiteDiario: 3 });
     expect(item).toMatchObject({ tipo: 'se_necessario', alertaEstoque: { tipo: 'baixo_leve' } });
+  });
+});
+
+describe('textoInicioPrevisto (inicio-de-cartela)', () => {
+  const agora = new Date(2026, 9, 31, 15, 0);
+  it('hoje, amanhã, mais adiante e atrasada', () => {
+    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 9, 31, 22, 0), atrasada: false }, agora)).toBe('hoje às 22:00');
+    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 10, 1, 22, 0), atrasada: false }, agora)).toBe('amanhã às 22:00');
+    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 10, 5, 22, 0), atrasada: false }, agora)).toBe('em 05/11 às 22:00');
+    expect(textoInicioPrevisto({ inicioPrevisto: new Date(2026, 9, 29, 22, 0), atrasada: true }, agora)).toBe('atrasada desde 29/10');
+    expect(textoInicioPrevisto({ inicioPrevisto: null, atrasada: false }, agora)).toBeNull();
   });
 });

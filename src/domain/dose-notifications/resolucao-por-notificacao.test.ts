@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTestDb, type TestDb } from '@/db/create-test-db';
-import { buscarDosePorId, inserirDose } from '@/db/repositories/doses';
-import { inserirEsquema } from '@/db/repositories/esquemas';
+import { buscarDosePorId, inserirDose, listarDosesPorEsquema } from '@/db/repositories/doses';
+import { buscarEsquemaPorId, inserirEsquema, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { buscarMedicamentoPorId, inserirMedicamento } from '@/db/repositories/medicamentos';
 import type { Criticidade } from '@/db/schema';
 import { confirmarDose } from '@/domain/adherence-history/resolucao';
+import { materializarJanela } from '@/domain/dose-scheduling/janela-rolante';
 import type { EsquemaDiario } from '@/domain/dose-scheduling/types';
 
 import {
@@ -187,5 +188,39 @@ describe('aplicarRespostaDeNotificacao (fix-permissoes-e-respostas)', () => {
       aplicarRespostaDeNotificacao(db, esquema, 'especial', dose.id, 'nao_tomar', new Date(2026, 0, 1, 8, 5)),
     ).toEqual({ tipo: 'ignorada' });
     expect(buscarDosePorId(db, dose.id)!.status).toBe('pendente');
+  });
+});
+
+describe('"tomei agora" no alarme de início de cartela (inicio-de-cartela)', () => {
+  it('inicia o ciclo, desconta o estoque e agenda o dia 2 para amanhã', () => {
+    const db = createTestDb();
+    const medicamentoId = inserirMedicamento(db, {
+      nome: 'Anticoncepcional',
+      dosagem: '1 comp.',
+      criticidade: 'especial',
+      quantidadeEmEstoque: 28,
+      quantidadePorEmbalagem: 28,
+    }).id;
+    const esquemaId = inserirEsquema(db, {
+      tipo: 'CICLICO',
+      medicamentoId,
+      diasAtivos: 21,
+      diasPausa: 7,
+      dataInicioCiclo: null,
+      inicioCartelaPrevisto: new Date(2026, 9, 29),
+      horarios: ['22:00'],
+    }).id;
+    const esquema = () => paraEsquemaDominio(buscarEsquemaPorId(db, esquemaId)!);
+    materializarJanela(db, esquema(), new Date(2026, 9, 28, 10));
+    const [inicio] = listarDosesPorEsquema(db, esquemaId);
+    const agora = new Date(2026, 9, 29, 22, 10);
+
+    expect(aplicarRespostaDeNotificacao(db, esquema(), 'especial', inicio.id, 'tomei_agora', agora)).toEqual({ tipo: 'resolvida' });
+
+    expect(buscarDosePorId(db, inicio.id)?.status).toBe('tomada');
+    expect(buscarEsquemaPorId(db, esquemaId)?.dataInicioCiclo).toEqual(agora);
+    expect(buscarMedicamentoPorId(db, medicamentoId)?.quantidadeEmEstoque).toBe(27);
+    const dia2 = listarDosesPorEsquema(db, esquemaId).find((dose) => dose.numeroNoCiclo === 2);
+    expect(dia2?.dataHoraPrevista).toEqual(new Date(2026, 9, 30, 22, 0));
   });
 });

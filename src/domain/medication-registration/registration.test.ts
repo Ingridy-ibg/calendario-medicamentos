@@ -76,7 +76,7 @@ describe('cadastrarMedicamento', () => {
     expect(listarDosesPorEsquema(db, esquema.id).length).toBeGreaterThan(0);
   });
 
-  it('CICLICO: cadastra em espera (sem nenhuma dose) e força criticidade especial mesmo com "comum" selecionado', () => {
+  it('CICLICO: cadastra em espera, só com a dose de início de hoje, e força criticidade especial mesmo com "comum" selecionado', () => {
     const { medicamento, esquema } = cadastrarMedicamento(
       db,
       { comuns: { ...comuns, criticidade: 'comum' }, esquema: { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '08:00' } },
@@ -85,7 +85,9 @@ describe('cadastrarMedicamento', () => {
 
     expect(buscarMedicamentoPorId(db, medicamento.id)).toMatchObject({ criticidade: 'especial' });
     expect(buscarEsquemaPorId(db, esquema.id)?.dataInicioCiclo).toBeNull();
-    expect(listarDosesPorEsquema(db, esquema.id)).toEqual([]);
+    expect(listarDosesPorEsquema(db, esquema.id)).toMatchObject([
+      { dataHoraPrevista: new Date(2026, 7, 26, 8, 0), numeroNoCiclo: 1, status: 'pendente' },
+    ]);
   });
 
   it('SE_NECESSARIO: cadastra sem nenhuma dose pré-gerada', () => {

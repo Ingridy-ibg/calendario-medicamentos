@@ -194,3 +194,71 @@ describe('montarCalendarioMensal — hoje com as doses reais e atrasadas', () =>
     expect(marcadorDoDia(ontem.itens)).toEqual({ token: 'statusAtraso', estilo: 'contorno' });
   });
 });
+
+describe('montarCalendarioMensal — início de cartela e ciclos seguintes (inicio-de-cartela)', () => {
+  let db: TestDb;
+  let medicamentoId: string;
+  let esquemaId: string;
+  beforeEach(() => {
+    db = createTestDb();
+    medicamentoId = inserirMedicamento(db, {
+      nome: 'Anticoncepcional',
+      dosagem: '1 comprimido',
+      criticidade: 'especial',
+      quantidadeEmEstoque: 84,
+      quantidadePorEmbalagem: 28,
+    }).id;
+    // Ciclo 21/7 às 22:00 com o dia 1 em 01/10.
+    esquemaId = inserirEsquema(db, {
+      tipo: 'CICLICO',
+      medicamentoId,
+      horarios: ['22:00'],
+      diasAtivos: 21,
+      diasPausa: 7,
+      dataInicioCiclo: new Date(2026, 9, 1, 22, 0),
+    }).id;
+  });
+
+  const tipos = (calendario: ReturnType<typeof montarCalendarioMensal>, dia: Date) =>
+    encontrarDia(calendario, dia)?.itens.map((item) => item.tipo);
+
+  it('próxima cartela no mês: pausa 22–28/10, início em 29/10 às 22:00, previstas em 30 e 31/10', () => {
+    const hoje = new Date(2026, 9, 2, 9, 0);
+    const outubro = montarCalendarioMensal(db, hoje, hoje);
+
+    for (let dia = 22; dia <= 28; dia++) expect(tipos(outubro, new Date(2026, 9, dia))).toEqual(['pausa-ciclo']);
+    expect(encontrarDia(outubro, new Date(2026, 9, 29))?.itens).toEqual([
+      { tipo: 'inicio-cartela', medicamentoId, nome: 'Anticoncepcional', horario: new Date(2026, 9, 29, 22, 0) },
+    ]);
+    expect(tipos(outubro, new Date(2026, 9, 30))).toEqual(['previsto']);
+    expect(tipos(outubro, new Date(2026, 9, 31))).toEqual(['previsto']);
+  });
+
+  it('ciclos seguintes em dezembro: cada cartela começa logo depois da pausa anterior', () => {
+    const hoje = new Date(2026, 9, 2, 9, 0);
+    const dezembro = montarCalendarioMensal(db, new Date(2026, 11, 1), hoje);
+
+    // Cartelas em 29/10, 26/11 e 24/12: dia 21 em 16/12, pausa 17–23/12.
+    expect(tipos(dezembro, new Date(2026, 11, 16))).toEqual(['previsto']);
+    for (let dia = 17; dia <= 23; dia++) expect(tipos(dezembro, new Date(2026, 11, dia))).toEqual(['pausa-ciclo']);
+    expect(tipos(dezembro, new Date(2026, 11, 24))).toEqual(['inicio-cartela']);
+    expect(tipos(dezembro, new Date(2026, 11, 25))).toEqual(['previsto']);
+  });
+
+  it('cartela atrasada: 29/10 aparece atrasada e a projeção supõe que ela começa hoje', () => {
+    inserirDose(db, { esquemaId, dataHoraPrevista: new Date(2026, 9, 29, 22, 0), numeroNoCiclo: 1 });
+    const hoje = new Date(2026, 9, 31, 10, 0);
+
+    const outubro = montarCalendarioMensal(db, hoje, hoje);
+    const dia29 = encontrarDia(outubro, new Date(2026, 9, 29))!;
+    expect(dia29.itens).toMatchObject([{ tipo: 'historico', status: 'pendente', atrasada: true, inicioDeCartela: true }]);
+    expect(marcadorDoDia(dia29.itens)).toEqual({ token: 'statusAtraso', estilo: 'contorno' });
+
+    // Com a cartela começando em 31/10: 01/11 é o dia 2, 20/11 o dia 21, pausa 21–27/11 e nova cartela em 28/11.
+    const novembro = montarCalendarioMensal(db, new Date(2026, 10, 1), hoje);
+    expect(tipos(novembro, new Date(2026, 10, 1))).toEqual(['previsto']);
+    expect(tipos(novembro, new Date(2026, 10, 20))).toEqual(['previsto']);
+    expect(tipos(novembro, new Date(2026, 10, 21))).toEqual(['pausa-ciclo']);
+    expect(tipos(novembro, new Date(2026, 10, 28))).toEqual(['inicio-cartela']);
+  });
+});

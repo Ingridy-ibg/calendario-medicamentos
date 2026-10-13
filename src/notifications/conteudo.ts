@@ -1,14 +1,9 @@
 import { AndroidNotificationPriority, type NotificationContentInput } from 'expo-notifications';
 
-import type { Criticidade } from '@/db/schema';
+import { type DadosTextoDose, textosDaDose } from '@/domain/dose-notifications/textos';
 import { categoriaParaDose } from '@/domain/dose-notifications/types';
 
-export interface DadosConteudoDose {
-  nomeMedicamento: string;
-  dosagem: string;
-  criticidade: Criticidade;
-  notificacoesSemResposta: number;
-}
+export type DadosConteudoDose = DadosTextoDose;
 
 /**
  * Especial usa título/prioridade que reforçam o estilo crítico
@@ -17,15 +12,11 @@ export interface DadosConteudoDose {
  * em segundo plano (`tarefas.ts`) saber o que resolver.
  */
 export function conteudoDose(doseId: string, dados: DadosConteudoDose): NotificationContentInput {
-  const ehReenvio = dados.notificacoesSemResposta > 0;
-  const titulo =
-    dados.criticidade === 'especial'
-      ? `⏰ Hora de tomar ${dados.nomeMedicamento}`
-      : `${ehReenvio ? 'Lembrete: ' : ''}Hora de tomar ${dados.nomeMedicamento}`;
+  const { titulo, corpo } = textosDaDose(dados);
 
   return {
     title: titulo,
-    body: dados.dosagem,
+    body: corpo,
     categoryIdentifier: categoriaParaDose(dados.criticidade),
     priority: dados.criticidade === 'especial' ? AndroidNotificationPriority.MAX : AndroidNotificationPriority.HIGH,
     sticky: false,

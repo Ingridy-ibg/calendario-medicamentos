@@ -63,9 +63,11 @@ describe('cíclico já em andamento (1.4)', () => {
     const db = createTestDb();
     const { esquema, previa } = cadastrarMedicamento(db, anticoncepcional('ativo', 12), as(12, 10));
     const doses = listarDosesPorEsquema(db, esquema.id).sort((a, b) => a.dataHoraPrevista!.getTime() - b.dataHoraPrevista!.getTime());
-    expect(doses.map((d) => [d.dataHoraPrevista!.getDate(), d.numeroNoCiclo])).toEqual(
-      Array.from({ length: 10 }, (_, i) => [12 + i, 12 + i]),
-    );
+    // Dias 12 a 21 do ciclo atual e a dose de início da nova cartela (inicio-de-cartela).
+    expect(doses.map((d) => [d.dataHoraPrevista!.getDate(), d.numeroNoCiclo])).toEqual([
+      ...Array.from({ length: 10 }, (_, i) => [12 + i, 12 + i]),
+      [29, 1],
+    ]);
     expect(previa.cartela).toMatchObject({
       restantesNaCartela: 10,
       ultimoDaCartela: as(21, 22),
@@ -76,10 +78,10 @@ describe('cíclico já em andamento (1.4)', () => {
     expect(montarAgendaDoDia(db, as(29, 9))).toMatchObject([{ tipo: 'aguardando_cartela' }]);
   });
 
-  it('dia 3 da pausa: nenhuma dose, pausa até 16/10, aguardando a partir de 17/10', () => {
+  it('dia 3 da pausa: só a dose de início em 17/10, pausa até 16/10, aguardando a partir de 17/10', () => {
     const db = createTestDb();
     const { esquema, previa } = cadastrarMedicamento(db, anticoncepcional('pausa', 3), as(12, 10));
-    expect(listarDosesPorEsquema(db, esquema.id)).toEqual([]);
+    expect(listarDosesPorEsquema(db, esquema.id).map((d) => [d.dataHoraPrevista!.getDate(), d.numeroNoCiclo])).toEqual([[17, 1]]);
     expect(previa.cartela).toMatchObject({ pausaAte: startOfDay(as(16, 0)), novaCartelaPrevista: startOfDay(as(17, 0)) });
     expect(montarAgendaDoDia(db, as(16, 9))).toEqual([]);
     expect(montarAgendaDoDia(db, as(17, 9))).toMatchObject([{ tipo: 'aguardando_cartela' }]);
@@ -175,5 +177,47 @@ describe('gravação a partir da prévia (2.3)', () => {
     const { esquema } = cadastrarMedicamento(db, intervalo(as(12, 6)), as(12, 10));
     const doses = listarDosesPorEsquema(db, esquema.id).map((d) => [d.dataHoraPrevista!.getHours(), d.status]);
     expect(doses).toEqual(expect.arrayContaining([[6, 'tomada'], [14, 'pendente']]));
+  });
+});
+
+describe('primeiro início de um cíclico novo (inicio-de-cartela, 6.1)', () => {
+  const novo = (inicioCartela?: 'ja_tomei' | 'amanha'): DadosFormularioMedicamento => ({
+    comuns: { ...comuns, nome: 'Anticoncepcional', criticidade: 'especial', quantidadeEmEstoque: 28, quantidadePorEmbalagem: 28 },
+    esquema: { tipo: 'CICLICO', diasAtivos: 21, diasPausa: 7, horario: '22:00' },
+    inicioCartela,
+  });
+
+  it('horário ainda por vir: "Nova cartela: hoje às 22:00", sem pergunta, com a dose de início hoje', () => {
+    expect(montarPreviaCadastro(novo(), as(12, 15)).novaCartela).toEqual({
+      pergunta: false,
+      escolha: null,
+      inicio: as(12, 22),
+      comecouHoje: null,
+    });
+    const db = createTestDb();
+    const { esquema } = cadastrarMedicamento(db, novo(), as(12, 15));
+    expect(listarDosesPorEsquema(db, esquema.id)).toMatchObject([{ dataHoraPrevista: as(12, 22), numeroNoCiclo: 1, status: 'pendente' }]);
+  });
+
+  it('horário já passou e já tomou: ciclo começa hoje com o dia 1 tomado às 22:00, estoque inalterado, dia 2 amanhã', () => {
+    const db = createTestDb();
+    const { medicamento, esquema } = cadastrarMedicamento(db, novo('ja_tomei'), as(12, 23));
+    expect(buscarEsquemaPorId(db, esquema.id)?.dataInicioCiclo).toEqual(as(12, 22));
+    const doses = listarDosesPorEsquema(db, esquema.id).sort((a, b) => a.dataHoraPrevista!.getTime() - b.dataHoraPrevista!.getTime());
+    expect(doses[0]).toMatchObject({ dataHoraPrevista: as(12, 22), numeroNoCiclo: 1, status: 'tomada' });
+    expect(doses[1]).toMatchObject({ dataHoraPrevista: as(13, 22), numeroNoCiclo: 2, status: 'pendente' });
+    expect(buscarMedicamentoPorId(db, medicamento.id)?.quantidadeEmEstoque).toBe(28);
+  });
+
+  it('horário já passou e começa amanhã: dose de início amanhã às 22:00 e nada hoje', () => {
+    const db = createTestDb();
+    const { esquema } = cadastrarMedicamento(db, novo('amanha'), as(12, 23));
+    expect(listarDosesPorEsquema(db, esquema.id)).toMatchObject([{ dataHoraPrevista: as(13, 22), numeroNoCiclo: 1, status: 'pendente' }]);
+  });
+
+  it('horário já passou e sem escolha: pergunta na prévia e nada é salvo', () => {
+    expect(montarPreviaCadastro(novo(), as(12, 23)).novaCartela).toMatchObject({ pergunta: true, escolha: null });
+    const db = createTestDb();
+    expect(() => cadastrarMedicamento(db, novo(), as(12, 23))).toThrow(ErroValidacao);
   });
 });

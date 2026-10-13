@@ -28,6 +28,8 @@ export type NovoEsquema =
        * (`confirmarPrimeiraDoseCiclo`/`confirmarNovaCartelaCiclica`).
        */
       dataInicioCiclo: Date | null;
+      /** Dia previsto da nova cartela quando não há ciclo (inicio-de-cartela). */
+      inicioCartelaPrevisto?: Date | null;
       horarios: string[];
     })
   | (Omit<CamposComuns, 'duracaoDias'> & { tipo: 'SE_NECESSARIO'; limiteDiario: number });
@@ -43,6 +45,7 @@ export function inserirEsquema(db: AppDb, dados: NovoEsquema, agora: Date = new 
     diasAtivos: null as number | null,
     diasPausa: null as number | null,
     dataInicioCiclo: null as Date | null,
+    inicioCartelaPrevisto: null as Date | null,
     duracaoDias: null as number | null,
     dataInicio: null as Date | null,
     limiteDiario: null as number | null,
@@ -76,6 +79,7 @@ export function inserirEsquema(db: AppDb, dados: NovoEsquema, agora: Date = new 
           diasAtivos: dados.diasAtivos,
           diasPausa: dados.diasPausa,
           dataInicioCiclo: dados.dataInicioCiclo,
+          inicioCartelaPrevisto: dados.inicioCartelaPrevisto ?? null,
           horarios: dados.horarios,
         };
       case 'SE_NECESSARIO':
@@ -175,7 +179,17 @@ export function atualizarEsquema(db: AppDb, id: string, patch: PatchEsquema, ago
  * editar os parâmetros nunca reinicie o ciclo.
  */
 export function definirInicioCiclo(db: AppDb, id: string, dataInicioCiclo: Date, agora: Date = new Date()) {
-  db.update(esquemas).set({ dataInicioCiclo, updatedAt: agora }).where(eq(esquemas.id, id)).run();
+  db.update(esquemas).set({ dataInicioCiclo, inicioCartelaPrevisto: null, updatedAt: agora }).where(eq(esquemas.id, id)).run();
+  return buscarEsquemaPorId(db, id);
+}
+
+/**
+ * Grava o dia previsto da nova cartela de um CICLICO sem ciclo
+ * (inicio-de-cartela) — no cadastro, na volta à agenda ou na correção dos
+ * cíclicos que estavam aguardando sem data.
+ */
+export function definirInicioCartelaPrevisto(db: AppDb, id: string, dia: Date | null, agora: Date = new Date()) {
+  db.update(esquemas).set({ inicioCartelaPrevisto: dia, updatedAt: agora }).where(eq(esquemas.id, id)).run();
   return buscarEsquemaPorId(db, id);
 }
 
@@ -239,6 +253,7 @@ export function paraEsquemaDominio(linha: EsquemaRow): Esquema {
         diasPausa: linha.diasPausa ?? 0,
         horarios: linha.horarios ?? [],
         dataInicioCiclo: linha.dataInicioCiclo,
+        inicioCartelaPrevisto: linha.inicioCartelaPrevisto,
       };
     case 'SE_NECESSARIO':
       return {

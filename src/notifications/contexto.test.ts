@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTestDb, type TestDb } from '@/db/create-test-db';
-import { inserirDose } from '@/db/repositories/doses';
-import { inserirEsquema } from '@/db/repositories/esquemas';
-import { inserirMedicamento } from '@/db/repositories/medicamentos';
+import { inserirDose, listarDosesPorEsquema, reagendarProximaNotificacao } from '@/db/repositories/doses';
+import { buscarEsquemaPorId, inserirEsquema, paraEsquemaDominio } from '@/db/repositories/esquemas';
+import { atualizarMedicamento, inserirMedicamento } from '@/db/repositories/medicamentos';
+import { materializarJanela } from '@/domain/dose-scheduling/janela-rolante';
 import { identificadorDose, identificadorPausaCiclo } from '@/domain/dose-notifications/reconciliador';
 
 import { buscarContextoDaDose, listarAlvosDesejados } from './contexto';
@@ -109,5 +110,49 @@ describe('buscarContextoDaDose', () => {
   it('retorna null para uma dose inexistente', () => {
     const db = createTestDb();
     expect(buscarContextoDaDose(db, 'não-existe')).toBeNull();
+  });
+});
+
+describe('listarAlvosDesejados — dose de início de cartela (inicio-de-cartela)', () => {
+  let db: TestDb;
+  beforeEach(() => (db = createTestDb()));
+
+  function ciclicoAguardando(notificacoesAtivas: boolean) {
+    const medicamentoId = inserirMedicamento(db, {
+      nome: 'Anticoncepcional',
+      dosagem: '1 comprimido',
+      criticidade: 'especial',
+      quantidadeEmEstoque: 28,
+      quantidadePorEmbalagem: 28,
+    }).id;
+    if (!notificacoesAtivas) atualizarMedicamento(db, medicamentoId, { notificacoesAtivas: false });
+    const esquemaId = inserirEsquema(db, {
+      tipo: 'CICLICO',
+      medicamentoId,
+      horarios: ['22:00'],
+      diasAtivos: 21,
+      diasPausa: 7,
+      dataInicioCiclo: null,
+      inicioCartelaPrevisto: new Date(2026, 9, 29),
+    }).id;
+    const esquema = paraEsquemaDominio(buscarEsquemaPorId(db, esquemaId)!);
+    materializarJanela(db, esquema, new Date(2026, 9, 27, 10));
+    return listarDosesPorEsquema(db, esquemaId);
+  }
+
+  it('entra como alvo de dose, com o reenvio indefinido do especial', () => {
+    const [inicio] = ciclicoAguardando(true);
+    const alvos = listarAlvosDesejados(db, new Date(2026, 9, 27, 10));
+    expect(alvos).toContainEqual(expect.objectContaining({ identifier: identificadorDose(inicio.id), dataHora: new Date(2026, 9, 29, 22) }));
+
+    // Mesmo depois de muitos reenvios sem resposta, continua desejado.
+    reagendarProximaNotificacao(db, inicio.id, { proximaNotificacaoEm: new Date(2026, 9, 31, 8), notificacoesSemResposta: 20 });
+    expect(listarAlvosDesejados(db, new Date(2026, 9, 31, 7)).map((a) => a.identifier)).toContain(identificadorDose(inicio.id));
+  });
+
+  it('fica fora dos alvos com as notificações do medicamento desativadas', () => {
+    const [inicio] = ciclicoAguardando(false);
+    expect(inicio).toBeDefined();
+    expect(listarAlvosDesejados(db, new Date(2026, 9, 27, 10))).toEqual([]);
   });
 });

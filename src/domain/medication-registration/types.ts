@@ -42,4 +42,11 @@ export interface DadosFormularioMedicamento {
   esquema: DadosEsquemaFormulario;
   /** Presente quando "Já estava tomando" está ligado. */
   emUso?: EmUsoFormulario;
+  /**
+   * Cíclico novo (ou de volta à agenda) cujo horário de hoje já passou: a
+   * resposta a "Você já tomou o 1º comprimido hoje?" (inicio-de-cartela).
+   */
+  inicioCartela?: EscolhaInicioCartela;
 }
+
+export type EscolhaInicioCartela = 'ja_tomei' | 'amanha';
