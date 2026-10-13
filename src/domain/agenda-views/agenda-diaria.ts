@@ -8,7 +8,8 @@ import type { StatusDose } from '@/db/schema';
 import { estaAtrasada } from '@/domain/adherence-history/classificacao';
 import { calcularStatusDoDia } from '@/domain/dose-scheduling/ciclico';
 import { combinarDataEHorario } from '@/domain/dose-scheduling/horario';
-import { temAlertaDeRecompra } from '@/domain/medication-stock/alerta';
+import { type AlertaEstoque, alertaVisivelNaLista } from '@/domain/medication-stock/alerta';
+import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
 
 export interface ItemAgendaDose {
   tipo: 'dose';
@@ -25,7 +26,8 @@ export interface ItemAgendaDose {
   atrasada: boolean;
   /** Só para CICLICO com dose hoje — dia de pausa não tem dose para confirmar (ver `dose-scheduling/ciclico.ts`). */
   posicaoCiclo: { dia: number; totalDiasAtivos: number } | null;
-  alertaEstoque: boolean;
+  /** Estoque insuficiente, baixo ou baixo leve (a sobra só aparece no detalhe). */
+  alertaEstoque: AlertaEstoque;
 }
 
 export interface ItemAgendaSeNecessario {
@@ -36,7 +38,8 @@ export interface ItemAgendaSeNecessario {
   dosagem: string;
   registradasHoje: number;
   limiteDiario: number;
-  alertaEstoque: boolean;
+  /** Estoque insuficiente, baixo ou baixo leve (a sobra só aparece no detalhe). */
+  alertaEstoque: AlertaEstoque;
 }
 
 /**
@@ -52,7 +55,8 @@ export interface ItemAgendaAguardandoCartela {
   dosagem: string;
   /** Hoje no horário do ciclo — define a seção (manhã/tarde/noite) e a ordem. */
   horario: Date | null;
-  alertaEstoque: boolean;
+  /** Estoque insuficiente, baixo ou baixo leve (a sobra só aparece no detalhe). */
+  alertaEstoque: AlertaEstoque;
 }
 
 export type ItemAgenda = ItemAgendaDose | ItemAgendaSeNecessario | ItemAgendaAguardandoCartela;
@@ -71,6 +75,15 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
 
   const esquemas = listarEsquemasAtivos(db);
   const esquemasPorId = new Map(esquemas.map((esquema) => [esquema.id, esquema]));
+
+  // Um alerta por esquema (um esquema pode ter várias doses hoje); `hoje` é o "agora" de quem abre a agenda.
+  const alertas = new Map<string, AlertaEstoque>();
+  const alertaDe = (linha: (typeof esquemas)[number], medicamento: { quantidadeEmEstoque: number; quantidadePorEmbalagem: number }) => {
+    if (!alertas.has(linha.id)) {
+      alertas.set(linha.id, alertaVisivelNaLista(alertaEstoqueDoMedicamento(db, paraEsquemaDominio(linha), medicamento, hoje)));
+    }
+    return alertas.get(linha.id) ?? null;
+  };
 
   const itensDose: ItemAgendaDose[] = listarDosesDoIntervalo(db, inicioDoDia, fimDoDia).flatMap((dose) => {
     const esquema = esquemasPorId.get(dose.esquemaId);
@@ -94,7 +107,7 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
           esquema.tipo === 'CICLICO' && dose.numeroNoCiclo !== null
             ? { dia: dose.numeroNoCiclo, totalDiasAtivos: esquema.diasAtivos ?? 0 }
             : null,
-        alertaEstoque: temAlertaDeRecompra(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem),
+        alertaEstoque: alertaDe(esquema, medicamento),
       },
     ];
   });
@@ -114,7 +127,7 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
           dosagem: medicamento.dosagem,
           registradasHoje: contarDosesRegistradasNoIntervalo(db, esquema.id, inicioDoDia, fimDoDia),
           limiteDiario: esquema.limiteDiario ?? 0,
-          alertaEstoque: temAlertaDeRecompra(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem),
+          alertaEstoque: alertaDe(esquema, medicamento),
         },
       ];
     });
@@ -136,7 +149,7 @@ export function montarAgendaDoDia(db: AppDb, hoje: Date): ItemAgenda[] {
           nome: medicamento.nome,
           dosagem: medicamento.dosagem,
           horario: horario ? combinarDataEHorario(inicioDoDia, horario) : null,
-          alertaEstoque: temAlertaDeRecompra(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem),
+          alertaEstoque: alertaDe(linha, medicamento),
         },
       ];
     });

@@ -1,6 +1,7 @@
 import type { buscarMedicamentoPorId } from '@/db/repositories/medicamentos';
 import { type EsquemaRow, paraEsquemaDominio } from '@/db/repositories/esquemas';
 import type { Criticidade, TipoEsquema } from '@/db/schema';
+import { paraCamposDoFormulario, paraUnidades } from '@/domain/medication-stock/caixas';
 
 import type { DadosEsquemaFormulario, DadosFormularioMedicamento, ModoDuracao } from './types';
 
@@ -13,7 +14,11 @@ export interface ValoresFormulario {
   nome: string;
   dosagem: string;
   criticidade: Criticidade;
-  quantidadeEmEstoque: string;
+  /** Estoque em caixas (stock-in-boxes): o domínio recebe o total em unidades. */
+  caixasFechadas: string;
+  /** Opcional; vazio = 0. */
+  naCaixaEmUso: string;
+  /** "Unidades por caixa" na tela. */
   quantidadePorEmbalagem: string;
   tipo: TipoEsquema;
   horarios: string[];
@@ -30,7 +35,8 @@ export const VALORES_INICIAIS: ValoresFormulario = {
   nome: '',
   dosagem: '',
   criticidade: 'comum',
-  quantidadeEmEstoque: '',
+  caixasFechadas: '',
+  naCaixaEmUso: '',
   quantidadePorEmbalagem: '',
   tipo: 'DIARIO',
   horarios: [],
@@ -72,18 +78,31 @@ function paraDadosEsquema(v: ValoresFormulario): DadosEsquemaFormulario {
   }
 }
 
+/** Campo obrigatório vazio vira NaN para a validação acusar; o opcional vira 0. */
+function paraNumeroObrigatorio(valor: string): number {
+  return valor.trim() ? paraNumero(valor) : Number.NaN;
+}
+
 /** Valores da tela → dados que o domínio valida e grava. */
 export function paraDadosFormulario(v: ValoresFormulario): DadosFormularioMedicamento {
+  const emCaixas = { caixasFechadas: paraNumeroObrigatorio(v.caixasFechadas), naCaixaEmUso: v.naCaixaEmUso.trim() ? paraNumero(v.naCaixaEmUso) : 0 };
+  const quantidadePorEmbalagem = paraNumeroObrigatorio(v.quantidadePorEmbalagem);
   return {
     comuns: {
       nome: v.nome,
       dosagem: v.dosagem,
       criticidade: criticidadeEfetiva(v),
-      quantidadeEmEstoque: paraNumero(v.quantidadeEmEstoque),
-      quantidadePorEmbalagem: paraNumero(v.quantidadePorEmbalagem),
+      quantidadeEmEstoque: paraUnidades({ ...emCaixas, porCaixa: quantidadePorEmbalagem }),
+      quantidadePorEmbalagem,
+      emCaixas,
     },
     esquema: paraDadosEsquema(v),
   };
+}
+
+function camposDeEstoque(unidades: number, porCaixa: number): Pick<ValoresFormulario, 'caixasFechadas' | 'naCaixaEmUso'> {
+  const { caixasFechadas, naCaixaEmUso } = paraCamposDoFormulario(unidades, porCaixa);
+  return { caixasFechadas: String(caixasFechadas), naCaixaEmUso: naCaixaEmUso === 0 ? '' : String(naCaixaEmUso) };
 }
 
 type Medicamento = NonNullable<ReturnType<typeof buscarMedicamentoPorId>>;
@@ -95,7 +114,7 @@ export function paraValoresFormulario(medicamento: Medicamento, esquemaRow: Esqu
     nome: medicamento.nome,
     dosagem: medicamento.dosagem,
     criticidade: medicamento.criticidade,
-    quantidadeEmEstoque: String(medicamento.quantidadeEmEstoque),
+    ...camposDeEstoque(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem),
     quantidadePorEmbalagem: String(medicamento.quantidadePorEmbalagem),
     tipo: esquemaRow.tipo,
   };

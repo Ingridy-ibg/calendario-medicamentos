@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SeloEstoque } from '@/components/medicamento/selo-estoque';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
@@ -14,7 +15,9 @@ import { db } from '@/db/client';
 import { paraEsquemaDominio } from '@/db/repositories/esquemas';
 import { listarMedicamentosAtivosComEsquema } from '@/db/repositories/medicamentos';
 import { resumirEsquema, situacaoCiclo, textoSituacaoCiclo } from '@/domain/medication-management/gestao';
-import { temAlertaDeRecompra } from '@/domain/medication-stock/alerta';
+import { type AlertaEstoque, alertaForte, alertaVisivelNaLista, textoAlertaEstoque } from '@/domain/medication-stock/alerta';
+import { textoEstoque } from '@/domain/medication-stock/caixas';
+import { alertaEstoqueDoMedicamento } from '@/domain/medication-stock/situacao';
 import { useTheme } from '@/hooks/use-theme';
 
 interface ItemLista {
@@ -23,8 +26,9 @@ interface ItemLista {
   dosagem: string;
   resumo: string;
   situacao: string | null;
-  estoque: number;
-  estoqueBaixo: boolean;
+  /** "1 caixa · restam 12" etc. */
+  estoque: string;
+  alerta: AlertaEstoque;
   silenciado: boolean;
 }
 
@@ -37,17 +41,17 @@ function montarLista(agora: Date): ItemLista[] {
       dosagem: medicamento.dosagem,
       resumo: resumirEsquema(dominio),
       situacao: dominio.tipo === 'CICLICO' ? textoSituacaoCiclo(situacaoCiclo(dominio, agora)) : null,
-      estoque: medicamento.quantidadeEmEstoque,
-      estoqueBaixo: temAlertaDeRecompra(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem),
+      estoque: textoEstoque(medicamento.quantidadeEmEstoque, medicamento.quantidadePorEmbalagem, dominio.tipo === 'CICLICO'),
+      alerta: alertaVisivelNaLista(alertaEstoqueDoMedicamento(db, dominio, medicamento, agora)),
       // "Se necessário" nunca tem lembrete, então "silenciado" não se aplica.
       silenciado: !medicamento.notificacoesAtivas && dominio.tipo !== 'SE_NECESSARIO',
     };
   });
 }
 
-function Selo({ texto, perigo, icone }: { texto: string; perigo?: boolean; icone?: 'sinoDesligado' }) {
+function Selo({ texto, icone }: { texto: string; icone?: 'sinoDesligado' }) {
   const theme = useTheme();
-  const cor = perigo ? theme.statusPerdida : theme.textSecondary;
+  const cor = theme.textSecondary;
   return (
     <View
       style={{
@@ -59,7 +63,7 @@ function Selo({ texto, perigo, icone }: { texto: string; perigo?: boolean; icone
         borderRadius: 999,
         paddingHorizontal: 8,
         paddingVertical: 2,
-        backgroundColor: perigo ? theme.statusPerdidaSoft : theme.surfaceMuted,
+        backgroundColor: theme.surfaceMuted,
       }}>
       {icone ? <Icone nome={icone} cor={cor} tamanho={12} /> : null}
       <ThemedText type="caption" style={{ color: cor, fontFamily: FAMILIA_TEXTO[600] }}>
@@ -74,7 +78,7 @@ function LinhaMedicamento({ item, ultimo }: { item: ItemLista; ultimo: boolean }
   return (
     <Tocavel
       accessibilityRole="button"
-      accessibilityLabel={`${item.nome}, ${item.dosagem}. ${item.resumo}. ${item.estoque} unidades${item.estoqueBaixo ? ', estoque baixo' : ''}${item.silenciado ? ', notificações silenciadas' : ''}`}
+      accessibilityLabel={`${item.nome}, ${item.dosagem}. ${item.resumo}. Estoque: ${item.estoque}${item.alerta ? `, ${textoAlertaEstoque(item.alerta)}` : ''}${item.silenciado ? ', notificações silenciadas' : ''}`}
       onPress={() => router.push({ pathname: '/medicamento/[id]', params: { id: item.id } })}
       style={{
         flexDirection: 'row',
@@ -111,16 +115,15 @@ function LinhaMedicamento({ item, ultimo }: { item: ItemLista; ultimo: boolean }
             {item.situacao}
           </ThemedText>
         ) : null}
-        {item.estoqueBaixo ? <Selo texto="Estoque baixo" perigo /> : null}
-        {item.silenciado ? <Selo texto="Silenciado" icone="sinoDesligado" /> : null}
-      </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <ThemedText numerico style={{ fontFamily: FAMILIA_TEXTO[600], fontSize: 15, color: item.estoqueBaixo ? theme.statusPerdida : theme.text }}>
+        <ThemedText type="caption" style={{ color: alertaForte(item.alerta) ? theme.statusPerdida : theme.textSecondary }}>
           {item.estoque}
         </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary">
-          un.
-        </ThemedText>
+        {item.alerta ? (
+          <View style={{ marginTop: 4 }}>
+            <SeloEstoque alerta={item.alerta} />
+          </View>
+        ) : null}
+        {item.silenciado ? <Selo texto="Silenciado" icone="sinoDesligado" /> : null}
       </View>
     </Tocavel>
   );

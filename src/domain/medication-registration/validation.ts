@@ -12,11 +12,22 @@ export function validarCamposComuns(comuns: CamposComunsFormulario): ErrosValida
   if (!comuns.dosagem.trim()) {
     erros.dosagem = 'Informe a dose.';
   }
-  if (!Number.isFinite(comuns.quantidadeEmEstoque) || comuns.quantidadeEmEstoque < 0) {
-    erros.quantidadeEmEstoque = 'Informe a quantidade em estoque.';
+  const porEmbalagemValida = Number.isFinite(comuns.quantidadePorEmbalagem) && comuns.quantidadePorEmbalagem > 0;
+  if (!porEmbalagemValida) {
+    erros.quantidadePorEmbalagem = comuns.emCaixas ? 'Informe as unidades por caixa.' : 'Informe a quantidade por embalagem.';
   }
-  if (!Number.isFinite(comuns.quantidadePorEmbalagem) || comuns.quantidadePorEmbalagem <= 0) {
-    erros.quantidadePorEmbalagem = 'Informe a quantidade por embalagem.';
+  if (comuns.emCaixas) {
+    const { caixasFechadas, naCaixaEmUso } = comuns.emCaixas;
+    if (!Number.isInteger(caixasFechadas) || caixasFechadas < 0) {
+      erros.caixasFechadas = 'Informe quantas caixas fechadas há em casa.';
+    }
+    if (!Number.isInteger(naCaixaEmUso) || naCaixaEmUso < 0) {
+      erros.naCaixaEmUso = 'Informe quantas unidades restam na caixa em uso.';
+    } else if (porEmbalagemValida && naCaixaEmUso >= comuns.quantidadePorEmbalagem) {
+      erros.naCaixaEmUso = `A caixa em uso tem menos de ${comuns.quantidadePorEmbalagem}; caixas cheias contam como fechadas.`;
+    }
+  } else if (!Number.isFinite(comuns.quantidadeEmEstoque) || comuns.quantidadeEmEstoque < 0) {
+    erros.quantidadeEmEstoque = 'Informe a quantidade em estoque.';
   }
   return erros;
 }

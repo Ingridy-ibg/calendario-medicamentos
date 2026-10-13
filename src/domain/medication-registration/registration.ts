@@ -161,9 +161,11 @@ export function cadastrarMedicamento(db: AppDb, dados: DadosFormularioMedicament
   // Medicamentos cíclicos são sempre especiais, independentemente do valor
   // selecionado pelo usuário no controle de criticidade.
   const criticidade = dados.esquema.tipo === 'CICLICO' ? 'especial' : dados.comuns.criticidade;
+  // `emCaixas` é só como a tela informou; o banco guarda unidades.
+  const { emCaixas: _emCaixas, ...comuns } = dados.comuns;
 
   return db.transaction((tx) => {
-    const medicamento = inserirMedicamento(tx, { ...dados.comuns, criticidade }, agora);
+    const medicamento = inserirMedicamento(tx, { ...comuns, criticidade }, agora);
     const esquema = inserirEsquema(tx, paraNovoEsquema(medicamento.id, dados.esquema, previa.plano), agora);
     materializarDosesIniciais(tx, buscarEsquemaPorId(tx, esquema.id)!, previa.plano, agora);
     return { medicamento, esquema, previa };
@@ -250,9 +252,10 @@ export function editarMedicamento(db: AppDb, medicamentoId: string, dados: Dados
 
   // Medicamentos cíclicos são sempre especiais, como no cadastro.
   const criticidade = dados.esquema.tipo === 'CICLICO' ? 'especial' : dados.comuns.criticidade;
+  const { emCaixas: _emCaixas, ...comuns } = dados.comuns;
 
   return db.transaction((tx) => {
-    const medicamento = atualizarMedicamento(tx, medicamentoId, { ...dados.comuns, criticidade }, agora);
+    const medicamento = atualizarMedicamento(tx, medicamentoId, { ...comuns, criticidade }, agora);
     const esquema = editarEsquema(tx, esquemaAtual.id, dados.esquema, agora);
     return { medicamento, esquema };
   });

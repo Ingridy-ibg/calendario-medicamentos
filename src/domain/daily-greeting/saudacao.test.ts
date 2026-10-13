@@ -42,7 +42,7 @@ const proxima: ItemAgendaDose = {
   horarioRegistro: null,
   atrasada: false,
   posicaoCiclo: null,
-  alertaEstoque: false,
+  alertaEstoque: null,
 };
 
 function resumo(parcial: Partial<ResumoDoDia>): ResumoDoDia {

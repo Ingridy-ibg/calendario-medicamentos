@@ -1,13 +1,10 @@
-import { addDays, addHours, addWeeks, differenceInCalendarDays, isSameDay, startOfDay, subDays } from 'date-fns';
+import { addDays, differenceInCalendarDays, isSameDay, startOfDay, subDays } from 'date-fns';
 
-import { gerarDosesCiclico } from '@/domain/dose-scheduling/ciclico';
-import { gerarDosesDiario } from '@/domain/dose-scheduling/diario';
-import { gerarDosesDiasSemana } from '@/domain/dose-scheduling/dias-semana';
-import { estaDentroDaDuracao } from '@/domain/dose-scheduling/duracao';
 import { combinarDataEHorario } from '@/domain/dose-scheduling/horario';
 import { gerarPrimeiraDoseIntervalo } from '@/domain/dose-scheduling/intervalo-horas';
 import type { Esquema } from '@/domain/dose-scheduling/types';
 import { type PrevisaoEstoque, preverFimDoEstoque } from '@/domain/medication-management/gestao';
+import { dosesDaGrade, dosesFuturas } from '@/domain/medication-stock/doses-restantes';
 
 import type { DadosFormularioMedicamento } from './types';
 
@@ -90,30 +87,6 @@ function duracao(modo: { modo: 'continuo' } | { modo: 'dias'; dias: number }): n
   return modo.modo === 'continuo' ? null : modo.dias;
 }
 
-/** Doses de grade (diário, dias da semana, cíclico) num intervalo, já em ordem. */
-function dosesDaGrade(esquema: Esquema, de: Date, ate: Date): Date[] {
-  switch (esquema.tipo) {
-    case 'DIARIO':
-      return gerarDosesDiario(esquema, de, ate).map((d) => d.dataHoraPrevista);
-    case 'DIAS_SEMANA':
-      return gerarDosesDiasSemana(esquema, de, ate).map((d) => d.dataHoraPrevista);
-    case 'CICLICO':
-      return gerarDosesCiclico(esquema, de, ate).map((d) => d.dataHoraPrevista);
-    default:
-      return [];
-  }
-}
-
-function serieIntervalo(esquema: Esquema, primeira: Date | null, limite: Date): Date[] {
-  if (esquema.tipo !== 'INTERVALO_HORAS' || !primeira) return [];
-  if (esquema.duracaoDias === null) return [primeira];
-  const serie: Date[] = [];
-  for (let dose = primeira; dose <= limite && estaDentroDaDuracao(esquema.dataInicio, esquema.duracaoDias, dose); dose = addHours(dose, esquema.intervaloHoras)) {
-    serie.push(dose);
-  }
-  return serie;
-}
-
 function resolverPlano(dados: DadosFormularioMedicamento, agora: Date): PlanoCadastro {
   const emUso = dados.emUso?.dados;
   const hoje = startOfDay(agora);
@@ -158,12 +131,8 @@ export function montarPreviaCadastro(dados: DadosFormularioMedicamento, agora: D
     );
   }
 
-  // Doses futuras (horizonte de 2 anos só para contar o tratamento; a grade gravada continua na janela rolante).
-  // Intervalo em horas: a série é estimada (cada dose real depende da anterior).
-  const futuras =
-    esquema.tipo === 'INTERVALO_HORAS'
-      ? serieIntervalo(esquema, plano.primeiraDoseIntervalo, addWeeks(agora, 104))
-      : dosesDaGrade(esquema, hoje, addWeeks(agora, 104)).filter((dose) => dose > agora);
+  // Doses futuras (a grade gravada continua na janela rolante; ver `dosesFuturas`).
+  const futuras = dosesFuturas(esquema, agora, plano.primeiraDoseIntervalo);
 
   const primeiraDosePrevistaOriginal =
     esquema.tipo === 'INTERVALO_HORAS' && dados.emUso?.dados?.tipo === 'intervalo'

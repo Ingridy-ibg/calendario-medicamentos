@@ -1,13 +1,13 @@
 ## 1. Regras puras
 
-- [ ] 1.1 Criar `src/domain/medication-stock/caixas.ts` (`paraUnidades`, `paraCaixas`, `textoEstoque`); verificar com testes: 1+12/30 → 42; 42/30 → "1 caixa · restam 12"; 72/30 → "3 caixas · uma em uso com 12"; 60/30 → "2 caixas"; 0 → "Acabou"; 30/21 cíclico → "2 cartelas · uma em uso com 9".
-- [ ] 1.2 Extrair de `previa.ts` a contagem de doses restantes do tratamento para `contarDosesRestantesDoTratamento`, sem mudar o comportamento da prévia; verificar com os testes de `previa.test.ts` passando e um teste novo da função.
-- [ ] 1.3 Substituir `temAlertaDeRecompra` por `classificarEstoque`; verificar com testes: contínuo na última caixa → baixo; tratamento 11 doses/8 un. → insuficiente (faltam 3); tratamento 14/20 → sobra 6; tratamento com fim nunca recebe "baixo"; "se necessário" 4 → baixo_leve e 5 → nada; cíclico na última cartela → baixo.
+- [x] 1.1 Criar `src/domain/medication-stock/caixas.ts` (`paraUnidades`, `paraCaixas`, `textoEstoque`); verificar com testes: 1+12/30 → 42; 12/30 → "1 caixa · restam 12"; 42/30 → "2 caixas · uma em uso com 12"; 72/30 → "3 caixas · uma em uso com 12"; 60/30 → "2 caixas"; 0 → "Acabou"; 30/21 cíclico → "2 cartelas · uma em uso com 9".
+- [x] 1.2 Extrair de `previa.ts` a contagem de doses restantes do tratamento para `contarDosesRestantesDoTratamento`, sem mudar o comportamento da prévia; verificar com os testes de `previa.test.ts` passando e um teste novo da função.
+- [x] 1.3 Substituir `temAlertaDeRecompra` por `classificarEstoque`; verificar com testes: contínuo na última caixa → baixo; tratamento 11 doses/8 un. → insuficiente (faltam 3); tratamento 14/20 → sobra 6; tratamento com fim nunca recebe "baixo"; "se necessário" 4 → baixo_leve e 5 → nada; cíclico na última cartela → baixo.
 
 ## 2. Domínio e formulário
 
-- [ ] 2.1 Trocar `alertaEstoque: boolean` por `AlertaEstoque` nos itens de `montarAgendaDoDia` e ajustar os testes da agenda; verificar com `npx vitest run`.
-- [ ] 2.2 Trocar `quantidadeEmEstoque` por `caixasFechadas` + `naCaixaEmUso` em `ValoresFormulario`, `paraDadosFormulario` e `paraValoresFormulario`, com a validação de `naCaixaEmUso < porCaixa`; verificar com o teste de ida e volta do formulário (42/30 ↔ 1 + 12) e um teste do erro.
+- [x] 2.1 Trocar `alertaEstoque: boolean` por `AlertaEstoque` nos itens de `montarAgendaDoDia` e ajustar os testes da agenda; verificar com `npx vitest run`.
+- [x] 2.2 Trocar `quantidadeEmEstoque` por `caixasFechadas` + `naCaixaEmUso` em `ValoresFormulario`, `paraDadosFormulario` e `paraValoresFormulario`, com a validação de `naCaixaEmUso < porCaixa`; verificar com o teste de ida e volta do formulário (42/30 ↔ 1 + 12) e um teste do erro.
 
 ## 3. Telas
 

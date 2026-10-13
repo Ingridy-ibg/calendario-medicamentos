@@ -17,6 +17,7 @@ import { db } from '@/db/client';
 import type { PrevisaoEstoque } from '@/domain/medication-management/gestao';
 import { type PreviaCadastro } from '@/domain/medication-registration/previa';
 import { cadastrarMedicamento, prepararCadastro } from '@/domain/medication-registration/registration';
+import { textoEstoque } from '@/domain/medication-stock/caixas';
 import type { DadosFormularioMedicamento } from '@/domain/medication-registration/types';
 import { useTheme } from '@/hooks/use-theme';
 import { aposSalvarMedicamento } from '@/lib/apos-salvar-medicamento';
@@ -238,9 +239,7 @@ export default function ConfirmarCadastroScreen() {
           <Cartao>
             <CabecalhoSecao>Estoque</CabecalhoSecao>
             <ThemedText style={{ fontFamily: FAMILIA_TEXTO[700] }}>
-              {estoque.cartelasFechadas !== null && cartela?.fase === 'ativo'
-                ? `Esta cartela${estoque.cartelasFechadas > 0 ? ` + ${estoque.cartelasFechadas} fechada${estoque.cartelasFechadas > 1 ? 's' : ''}` : ''}`
-                : `${estoque.quantidade} ${estoque.quantidade === 1 ? 'unidade' : 'unidades'}`}
+              {textoEstoque(estoque.quantidade, dados!.comuns.quantidadePorEmbalagem, dados!.esquema.tipo === 'CICLICO')}
             </ThemedText>
             {textoPrevisao(estoque.previsao) ? (
               <ThemedText type="small" themeColor="textSecondary">

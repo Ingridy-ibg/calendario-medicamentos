@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SeloEstoque } from '@/components/medicamento/selo-estoque';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Botao } from '@/components/ui/botao';
@@ -64,17 +65,6 @@ const ROTULO_CURTO: Record<StatusDose, string> = {
   pulada: 'Pulada',
   perdida: 'Perdida',
 };
-
-function SeloEstoqueBaixo() {
-  const theme = useTheme();
-  return (
-    <View style={{ backgroundColor: theme.statusPerdidaSoft, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
-      <ThemedText type="caption" style={{ color: theme.statusPerdida, fontFamily: FAMILIA_TEXTO[600] }}>
-        Estoque baixo
-      </ThemedText>
-    </View>
-  );
-}
 
 /** Botão circular de perfil: inicial do nome ou ícone de pessoa (specs/user-profile). */
 function BotaoPerfil() {
@@ -197,7 +187,7 @@ function ItemDose({ item, destaque, aoMudar }: { item: ItemAgendaDose; destaque:
             {item.atrasada ? 'Atrasada' : ROTULO_CURTO[item.status]}
             {item.status === 'tomada_com_atraso' && item.horarioRegistro ? `\n${format(item.horarioRegistro, 'HH:mm')}` : ''}
           </ThemedText>
-          {item.alertaEstoque ? <SeloEstoqueBaixo /> : null}
+          <SeloEstoque alerta={item.alertaEstoque} />
         </View>
       </View>
 
@@ -240,7 +230,7 @@ function ItemAguardandoCartela({ item, aoMudar }: { item: ItemAgendaAguardandoCa
           <ThemedText type="smallBold" themeColor="statusAtraso" style={{ textAlign: 'right' }}>
             Aguardando{'\n'}nova cartela
           </ThemedText>
-          {item.alertaEstoque ? <SeloEstoqueBaixo /> : null}
+          <SeloEstoque alerta={item.alertaEstoque} />
         </View>
       </View>
       <Botao rotulo="Comecei a nova cartela" onPress={comecarCartela} />
@@ -299,7 +289,7 @@ function ItemSeNecessario({ item, aoMudar }: { item: ItemAgendaSeNecessario; aoM
         ) : null}
         {item.alertaEstoque ? (
           <View style={{ alignSelf: 'flex-start', marginTop: 4 }}>
-            <SeloEstoqueBaixo />
+            <SeloEstoque alerta={item.alertaEstoque} />
           </View>
         ) : null}
       </Tocavel>

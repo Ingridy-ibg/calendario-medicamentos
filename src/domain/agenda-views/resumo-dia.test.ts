@@ -19,7 +19,7 @@ function dose(nome: string, hora: string | null, status: StatusDose): ItemAgenda
     horarioRegistro: null,
     atrasada: false,
     posicaoCiclo: null,
-    alertaEstoque: false,
+    alertaEstoque: null,
   };
 }
 
@@ -31,7 +31,7 @@ const seNecessario: ItemAgendaSeNecessario = {
   dosagem: '1 g',
   registradasHoje: 1,
   limiteDiario: 4,
-  alertaEstoque: false,
+  alertaEstoque: null,
 };
 
 describe('resumirDia', () => {
