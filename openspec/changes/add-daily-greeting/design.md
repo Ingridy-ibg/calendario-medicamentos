@@ -47,6 +47,12 @@ A ilustração é feita com `View`s arredondadas (halo, astro, pontos de estrela
 
 O título da agenda passa de "Agenda" para `textoSaudacao(periodoDoDia(agora), nome)`, recalculado no `useFocusEffect` que a tela já usa; o nome é lido do kv-store no mesmo ponto. Fonte de título reduzida de 36 para 30 para caber ao lado dos botões "Novo" e perfil; nomes longos usam só o primeiro nome e, se ainda assim não couber, `numberOfLines={1}` com reticências.
 
+### Notas da conferência na v57 (tarefa 1.1)
+
+- Abertura por notificação: `getLastNotificationResponse()` (síncrono) + `clearLastNotificationResponseAsync()` do `expo-notifications` instalado; a resposta é "consumida" ao ser detectada (`consumirAberturaPorNotificacao` em `src/lib/notificacoes-seguras.ts`), sempre `false` no Expo Go.
+- `AppState` e `AccessibilityInfo.isScreenReaderEnabled()` do React Native; a avaliação na abertura a frio espera `useRootNavigationState().key` para poder navegar.
+- Concluir a boas-vindas grava o dia como já saudado, para a saudação não aparecer ao voltar ao app no mesmo dia do primeiro uso.
+
 ## Risks / Trade-offs
 
 - [Abertura por notificação não ser detectável com confiança em todas as situações (ex.: ação respondida em segundo plano)] → nesse caso o app nem chega ao primeiro plano; quando chega por toque no corpo da notificação, `getLastNotificationResponse` cobre. Se falhar, o pior caso é a saudação aparecer uma vez antes da agenda, com toque para pular.

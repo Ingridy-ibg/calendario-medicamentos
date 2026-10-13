@@ -8,6 +8,7 @@ export const CHAVES_PREFERENCIAS = {
   boasVindasConcluida: 'boasVindasConcluida',
   nome: 'perfil.nome',
   aparencia: 'aparencia',
+  ultimaSaudacao: 'saudacao.ultimaExibicao',
 } as const;
 
 /** specs/onboarding: a boas-vindas aparece até ser concluída uma vez. */
@@ -38,4 +39,11 @@ export function esquemaDaAparencia(aparencia: Aparencia): 'light' | 'dark' | 'un
   if (aparencia === 'claro') return 'light';
   if (aparencia === 'escuro') return 'dark';
   return 'unspecified';
+}
+
+/** Datas são guardadas em ISO; valor ausente ou inválido vira `null` ("nunca"). */
+export function lerDataGuardada(valor: string | null): Date | null {
+  if (!valor) return null;
+  const data = new Date(valor);
+  return Number.isNaN(data.getTime()) ? null : data;
 }

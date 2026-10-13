@@ -1,16 +1,18 @@
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider, useRootNavigationState } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { Text, useColorScheme, View } from 'react-native';
+import { AppState, Text, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { Colors } from '@/constants/cores';
 import { FONTES_DO_APP } from '@/constants/fontes';
 import { db } from '@/db/client';
 import { isExpoGo } from '@/lib/expo-go';
-import { aplicarAparenciaSalva, usePreferencias } from '@/lib/preferencias';
+import { deveExibirSaudacao } from '@/domain/daily-greeting/saudacao';
+import { consumirAberturaPorNotificacao } from '@/lib/notificacoes-seguras';
+import { aplicarAparenciaSalva, lerUltimaSaudacao, usePreferencias } from '@/lib/preferencias';
 
 import migrations from '../../drizzle/migrations';
 
@@ -19,6 +21,34 @@ SplashScreen.preventAutoHideAsync();
 // tema escolhido no perfil (specs/user-profile).
 aplicarAparenciaSalva();
 
+/**
+ * Saudação na primeira abertura comum do dia (specs/daily-greeting): avaliada
+ * quando a navegação fica pronta (abertura a frio) e a cada volta ao primeiro
+ * plano. Concluir a boas-vindas não dispara a avaliação, então o primeiro uso
+ * nunca mostra a saudação.
+ */
+function useSaudacaoDiaria(navegacaoPronta: boolean) {
+  useEffect(() => {
+    if (!navegacaoPronta) return;
+
+    async function avaliar() {
+      const exibir = deveExibirSaudacao({
+        agora: new Date(),
+        ultimaExibicao: lerUltimaSaudacao(),
+        boasVindasConcluida: usePreferencias.getState().boasVindasConcluida,
+        abertoPorNotificacao: await consumirAberturaPorNotificacao(),
+      });
+      if (exibir) router.push('/saudacao');
+    }
+
+    void avaliar();
+    const assinatura = AppState.addEventListener('change', (estado) => {
+      if (estado === 'active') void avaliar();
+    });
+    return () => assinatura.remove();
+  }, [navegacaoPronta]);
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const { success, error } = useMigrations(db, migrations);
@@ -26,6 +56,8 @@ export default function RootLayout() {
   const [fontesCarregadas, erroFontes] = useFonts(FONTES_DO_APP);
   const fontesProntas = fontesCarregadas || erroFontes != null;
   const boasVindasConcluida = usePreferencias((estado) => estado.boasVindasConcluida);
+  const estadoNavegacao = useRootNavigationState();
+  useSaudacaoDiaria(!!estadoNavegacao?.key && !!success && fontesProntas);
 
   useEffect(() => {
     if (!success || isExpoGo) return;
@@ -65,6 +97,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="medicamento/novo" options={{ presentation: 'modal' }} />
           <Stack.Screen name="perfil" />
+          <Stack.Screen name="saudacao" options={{ animation: 'fade', gestureEnabled: false }} />
         </Stack.Protected>
         <Stack.Protected guard={!boasVindasConcluida}>
           <Stack.Screen name="boas-vindas" options={{ gestureEnabled: false }} />

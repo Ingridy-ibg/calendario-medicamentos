@@ -5,6 +5,7 @@ import {
   esquemaDaAparencia,
   inicialDoNome,
   lerAparencia,
+  lerDataGuardada,
   normalizarNome,
 } from './preferencias';
 
@@ -47,5 +48,17 @@ describe('aparência', () => {
     expect(esquemaDaAparencia('claro')).toBe('light');
     expect(esquemaDaAparencia('escuro')).toBe('dark');
     expect(esquemaDaAparencia('sistema')).toBe('unspecified');
+  });
+});
+
+describe('lerDataGuardada', () => {
+  it('faz a ida e volta de uma data em ISO', () => {
+    const data = new Date(2026, 9, 12, 7, 12);
+    expect(lerDataGuardada(data.toISOString())?.getTime()).toBe(data.getTime());
+  });
+
+  it('ausente ou inválida vira null', () => {
+    expect(lerDataGuardada(null)).toBeNull();
+    expect(lerDataGuardada('ontem')).toBeNull();
   });
 });

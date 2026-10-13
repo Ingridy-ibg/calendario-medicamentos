@@ -8,6 +8,7 @@ import {
   deveExibirBoasVindas,
   esquemaDaAparencia,
   lerAparencia,
+  lerDataGuardada,
   normalizarNome,
 } from '@/domain/preferencias/preferencias';
 
@@ -48,6 +49,9 @@ export const usePreferencias = create<PreferenciasState>((set) => ({
 
   concluirBoasVindas: () => {
     Storage.setItemSync(CHAVES_PREFERENCIAS.boasVindasConcluida, '1');
+    // O dia do primeiro uso conta como já saudado: a saudação só aparece a
+    // partir da próxima abertura em outro dia (specs/daily-greeting).
+    gravarUltimaSaudacao(new Date());
     set({ boasVindasConcluida: true });
   },
 
@@ -68,4 +72,13 @@ export const usePreferencias = create<PreferenciasState>((set) => ({
 /** Lida no topo do layout raiz, antes de qualquer tela, para a splash já abrir no tema certo. */
 export function aplicarAparenciaSalva(): void {
   Appearance.setColorScheme(esquemaDaAparencia(usePreferencias.getState().aparencia));
+}
+
+/** Data da última tela de saudação exibida (add-daily-greeting). */
+export function lerUltimaSaudacao(): Date | null {
+  return lerDataGuardada(lerItem(CHAVES_PREFERENCIAS.ultimaSaudacao));
+}
+
+export function gravarUltimaSaudacao(agora: Date): void {
+  Storage.setItemSync(CHAVES_PREFERENCIAS.ultimaSaudacao, agora.toISOString());
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Colors, type ThemeColor } from './cores';
+import { Colors, PALETAS_SAUDACAO, type ThemeColor } from './cores';
 
 function luminancia(hex: string): number {
   const canais = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
@@ -49,6 +49,25 @@ describe('contraste da paleta', () => {
       it(`${tema}: ${texto} sobre ${fundo} tem pelo menos 4,5:1`, () => {
         expect(contraste(Colors[tema][texto], Colors[tema][fundo])).toBeGreaterThanOrEqual(4.5);
       });
+    }
+  }
+});
+
+describe('contraste das paletas da saudação', () => {
+  for (const tema of ['light', 'dark'] as const) {
+    for (const periodo of ['manha', 'tarde', 'noite'] as const) {
+      const p = PALETAS_SAUDACAO[tema][periodo];
+      for (const [texto, fundo] of [
+        [p.texto, p.fundo],
+        [p.secundario, p.fundo],
+        [p.texto, p.cartao],
+        [p.secundario, p.cartao],
+        [p.iconeTexto, p.iconeFundo],
+      ]) {
+        it(`${tema}/${periodo}: ${texto} sobre ${fundo} tem pelo menos 4,5:1`, () => {
+          expect(contraste(texto, fundo)).toBeGreaterThanOrEqual(4.5);
+        });
+      }
     }
   }
 });

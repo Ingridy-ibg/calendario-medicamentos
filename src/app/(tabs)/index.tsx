@@ -27,6 +27,7 @@ import { agruparPorPeriodo, type ResumoDoDia, resumirDia } from '@/domain/agenda
 import { confirmarDose, pularDose } from '@/domain/adherence-history/resolucao';
 import { registrarDoseSeNecessarioNoBanco } from '@/domain/adherence-history/se-necessario';
 import type { EsquemaSeNecessario } from '@/domain/dose-scheduling/types';
+import { periodoDoDia, textoSaudacao } from '@/domain/daily-greeting/saudacao';
 import { inicialDoNome } from '@/domain/preferencias/preferencias';
 import { useTheme } from '@/hooks/use-theme';
 import { reconciliarNotificacoesSeDisponivel } from '@/lib/notificacoes-seguras';
@@ -222,6 +223,7 @@ function ItemSeNecessario({ item, aoMudar }: { item: ItemAgendaSeNecessario; aoM
 
 export default function AgendaDoDiaScreen() {
   const theme = useTheme();
+  const nome = usePreferencias((estado) => estado.nome);
   const [itens, setItens] = useState<ItemAgenda[]>([]);
   const [hoje, setHoje] = useState(new Date());
 
@@ -245,8 +247,12 @@ export default function AgendaDoDiaScreen() {
               <ThemedText type="small" themeColor="textSecondary">
                 {capitalizar(format(hoje, "EEEE, d 'de' MMMM", { locale: ptBR }))}
               </ThemedText>
-              <ThemedText type="display" accessibilityRole="header" numberOfLines={1}>
-                Agenda
+              <ThemedText
+                type="display"
+                accessibilityRole="header"
+                numberOfLines={1}
+                style={{ fontSize: 30, lineHeight: 34 }}>
+                {textoSaudacao(periodoDoDia(hoje), nome)}
               </ThemedText>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
