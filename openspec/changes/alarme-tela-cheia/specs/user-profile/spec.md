@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Situação das permissões de lembrete
-A tela de perfil SHALL mostrar se cada permissão de que os lembretes dependem está concedida: notificações, alarmes no horário exato e alarme em tela cheia. O estado exibido SHALL refletir a situação real do aparelho, sem pedir nenhuma permissão só por ter sido aberta. Para cada permissão não concedida, SHALL oferecer a ação "Permitir", que faz o pedido (ou abre a configuração do sistema, quando o pedido direto não for possível) e atualiza a situação exibida ao voltar.
+A tela de perfil SHALL mostrar se cada permissão de que os lembretes dependem está concedida: notificações, alarmes no horário exato, alarme em tela cheia e alarme por cima de outros apps. O estado exibido SHALL refletir a situação real do aparelho, sem pedir nenhuma permissão só por ter sido aberta. Para cada permissão não concedida, SHALL oferecer a ação "Permitir", que faz o pedido (ou abre a configuração do sistema, quando o pedido direto não for possível) e atualiza a situação exibida ao voltar.
 
 #### Scenario: Permissão já concedida
 - **WHEN** as notificações estão permitidas e o usuário abre o perfil
@@ -14,6 +14,10 @@ A tela de perfil SHALL mostrar se cada permissão de que os lembretes dependem e
 #### Scenario: Tela cheia negada
 - **WHEN** a permissão de tela cheia não está concedida e o usuário abre o perfil
 - **THEN** a linha "Alarme em tela cheia" mostra que, sem ela, o especial vira só uma notificação, e oferece "Permitir"
+
+#### Scenario: Aparecer sobre outros apps negada
+- **WHEN** a permissão "Aparecer sobre outros apps" não está concedida e o usuário abre o perfil
+- **THEN** a linha "Alarme por cima de outros apps" mostra que, sem ela, com o celular em uso o especial aparece só como aviso, e oferece "Permitir"
 
 #### Scenario: Abrir o perfil não pede permissão
 - **WHEN** o usuário abre o perfil com alguma permissão não concedida

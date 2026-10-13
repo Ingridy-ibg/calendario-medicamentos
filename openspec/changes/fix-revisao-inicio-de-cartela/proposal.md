@@ -20,6 +20,7 @@ Há também inconsistências menores na agenda e no calendário, e duplicação 
 - **Notificação sai da bandeja depois da resposta**: tocar num botão da notificação de uma dose comum, ou resolver a dose no app com a notificação aberta, remove essa notificação. No "Adiar", ela some e volta em 30 minutos. Arrastar para dispensar continua sem efeito no reenvio.
 - **Tela de alarme nunca prende o usuário**: "Fechar" leva à boas-vindas quando ela ainda não foi concluída.
 - **Sem backup automático do Android** (`android.allowBackup: false`): reinstalar não restaura alarmes nem banco de backups antigos e possivelmente desencontrados.
+- **Exportação para a web não quebra**: aplicar o tema salvo só onde `Appearance.setColorScheme` existe. Sem isso, o `eas update` sem `--platform` falha ao gerar a versão web estática.
 - **Calendário**: o dia de hoje com a dose de início pendente mostra a marca de "Nova cartela", como os dias futuros.
 - **Agenda**: o atraso do início da cartela usa a mesma regra das doses (`estaAtrasada`) e é avaliado na hora de exibir, não só ao carregar a agenda.
 - **Agendamento**: os dois agendadores (notificação e alarme nativo) montam o texto da dose por uma função única, com uma só leitura da dose no banco.

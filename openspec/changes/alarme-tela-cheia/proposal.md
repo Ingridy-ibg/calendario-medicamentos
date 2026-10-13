@@ -6,7 +6,7 @@ A spec já pede que a dose especial seja "estilo alarme, difícil de ignorar (ex
 
 - A dose especial passa a disparar um **alarme em tela cheia**:
   - liga a tela, aparece sobre o bloqueio e toca som em loop (e vibra) até o usuário agir;
-  - com o aparelho em uso, aparece como um aviso flutuante com "Tomei agora".
+  - com o aparelho em uso, abre a tela de alarme por cima do app em uso, quando a permissão "Aparecer sobre outros apps" está concedida. Sem ela, ou durante uma ligação, aparece como um aviso flutuante com "Tomei agora".
 - Nova **tela de alarme** com hora, nome, dosagem e a **observação** do medicamento, e as ações:
   - **Tomei agora**: registra a dose e encerra o alarme;
   - **Silenciar som**: para o som e a vibração, a dose continua pendente e o alarme volta no próximo reenvio de 30 min.
@@ -18,7 +18,7 @@ A spec já pede que a dose especial seja "estilo alarme, difícil de ignorar (ex
   - volume aumentando aos poucos;
   - prévia e "Testar alarme".
 - A **notificação comum** passa a usar o padrão de vibração longo que hoje é do especial.
-- O Perfil passa a mostrar o **estado real** das permissões "Alarmes no horário exato" e "Alarme em tela cheia" (hoje o alarme exato aparece como "desconhecido").
+- O Perfil passa a mostrar o **estado real** das permissões "Alarmes no horário exato", "Alarme em tela cheia" e "Alarme por cima de outros apps" (hoje o alarme exato aparece como "desconhecido"). As duas últimas também são pedidas no primeiro cadastro de um especial.
 
 Depende de `identidade-e-observacoes` (campo de observações) e de `fix-permissoes-e-respostas` (processamento de respostas idempotente). Implementar depois das duas.
 

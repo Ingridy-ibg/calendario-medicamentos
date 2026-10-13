@@ -1,7 +1,13 @@
 ## MODIFIED Requirements
 
 ### Requirement: Notificações especiais usam um estilo crítico e difícil de ignorar
-O sistema SHALL apresentar cada disparo de dose de um medicamento especial como um alarme. Com o aparelho bloqueado ou com a tela apagada, o sistema SHALL acender a tela e exibir a tela de alarme em tela cheia sobre o bloqueio. Com o aparelho desbloqueado e em uso, o sistema SHALL exibir um aviso flutuante persistente com a ação "Tomei agora", que ao ser tocado no corpo abre a tela de alarme. Em ambos os casos o sistema SHALL tocar o som de alarme escolhido em repetição contínua, usando o volume de alarme do aparelho (inclusive com o aparelho no modo silencioso ou vibrar), e vibrar se essa opção estiver ligada, até o usuário confirmar a dose ou silenciar o alarme, ou por no máximo 5 minutos sem resposta. Nesse caso o som para, o aviso continua visível e o reenvio de 30 minutos segue normalmente. Se a permissão de tela cheia não estiver concedida, o sistema SHALL exibir o aviso flutuante com som contínuo no lugar da tela cheia.
+O sistema SHALL apresentar cada disparo de dose de um medicamento especial como um alarme.
+
+- Com o aparelho bloqueado ou com a tela apagada, o sistema SHALL acender a tela e exibir a tela de alarme em tela cheia sobre o bloqueio.
+- Com o aparelho desbloqueado e em uso, e com a permissão "Aparecer sobre outros apps" concedida, o sistema SHALL abrir a tela de alarme em tela cheia por cima do app em uso, em qualquer versão do Android suportada.
+- Sem essa permissão, ou durante uma ligação ou chamada de vídeo, o sistema SHALL exibir um aviso flutuante persistente com a ação "Tomei agora", que ao ser tocado no corpo abre a tela de alarme.
+
+Em todos os casos o sistema SHALL tocar o som de alarme escolhido em repetição contínua, usando o volume de alarme do aparelho (inclusive com o aparelho no modo silencioso ou vibrar), e vibrar se essa opção estiver ligada, até o usuário confirmar a dose ou silenciar o alarme, ou por no máximo 5 minutos sem resposta. Nesse caso o som para, o aviso continua visível e o reenvio de 30 minutos segue normalmente. Se a permissão de tela cheia não estiver concedida, o sistema SHALL exibir o aviso flutuante com som contínuo no lugar da tela cheia sobre o bloqueio.
 
 #### Scenario: Estilo de notificação especial
 - **WHEN** uma notificação dispara para a dose de um dia ativo de um medicamento especial
@@ -15,9 +21,17 @@ O sistema SHALL apresentar cada disparo de dose de um medicamento especial como 
 - **WHEN** o alarme de uma dose especial toca por 5 minutos sem nenhuma ação
 - **THEN** o som para, o aviso continua na tela de bloqueio e o próximo alarme dispara 30 minutos após o disparo
 
-#### Scenario: Aparelho em uso
-- **WHEN** chega o horário de uma dose especial com o usuário usando outro app
+#### Scenario: Aparelho em uso, com a permissão de aparecer sobre outros apps
+- **WHEN** chega o horário de uma dose especial com o usuário usando outro app e a permissão "Aparecer sobre outros apps" concedida
+- **THEN** a tela de alarme abre em tela cheia por cima do app em uso e o som toca em repetição
+
+#### Scenario: Aparelho em uso, sem a permissão de aparecer sobre outros apps
+- **WHEN** chega o horário de uma dose especial com o usuário usando outro app e a permissão "Aparecer sobre outros apps" não concedida
 - **THEN** um aviso flutuante com "Tomei agora" aparece no topo e o som toca em repetição
+
+#### Scenario: Durante uma ligação
+- **WHEN** chega o horário de uma dose especial durante uma ligação ou chamada de vídeo, mesmo com a permissão "Aparecer sobre outros apps"
+- **THEN** a tela de alarme não abre por cima da ligação; aparece o aviso flutuante com "Tomei agora" e o som toca
 
 #### Scenario: Modo silencioso
 - **WHEN** o aparelho está no modo silencioso e chega o horário de uma dose especial
@@ -26,6 +40,17 @@ O sistema SHALL apresentar cada disparo de dose de um medicamento especial como 
 #### Scenario: Sem permissão de tela cheia
 - **WHEN** a permissão de tela cheia foi negada e chega o horário de uma dose especial com o aparelho bloqueado
 - **THEN** o aviso aparece na tela de bloqueio com som contínuo, sem abrir a tela cheia
+
+### Requirement: Permissão de tela cheia pedida uma única vez
+O sistema SHALL abrir os pedidos das permissões de tela cheia e de aparecer sobre outros apps apenas no primeiro cadastro de um medicamento especial (incluindo cíclicos) no aparelho, um após o outro e só para as que ainda não estiverem concedidas, e SHALL NOT repeti-los em cadastros seguintes de especiais. Depois disso, as duas continuam disponíveis pelo "Permitir" do Perfil.
+
+#### Scenario: Primeiro medicamento especial
+- **WHEN** o usuário cadastra o primeiro medicamento especial e nenhuma das duas permissões está concedida
+- **THEN** a configuração de tela cheia do Android é aberta e, ao voltar, a configuração de aparecer sobre outros apps é aberta
+
+#### Scenario: Segundo medicamento especial
+- **WHEN** o usuário já cadastrou um medicamento especial antes e cadastra outro
+- **THEN** nenhuma das duas configurações do Android é aberta de novo
 
 ## ADDED Requirements
 

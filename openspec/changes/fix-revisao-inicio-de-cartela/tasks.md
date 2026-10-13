@@ -27,6 +27,8 @@
 - [x] 5.1 `ContextoDose` com a dose e `textosDoContexto`, usados pelos dois agendadores sem leitura extra da dose. Verificar: `npx tsc --noEmit` e os testes de `contexto.test.ts` e `textos.test.ts` passam
 - [x] 5.2 Tirar `definirInicioDosCiclicosSemData` de `renovarJanelasAtivas` e criar `aplicarCorrecoesUnicas` (marca `correcao.inicioCartelaSemData` no kv-store), chamada no layout raiz e na tarefa periódica. Verificar: teste de que `renovarJanelasAtivas` não altera mais `inicioCartelaPrevisto`; teste puro da decisão de rodar pela marca
 
+- [x] 5.3 `aplicarAparenciaSalva` (e `definirAparencia`) só chamam `Appearance.setColorScheme` quando a função existe. Verificar: `npx expo export --platform web` termina sem o erro `setColorScheme is not a function`
+
 ## 6. Validação
 
 - [x] 6.1 Rodar `npx vitest run` e `npx tsc --noEmit`. Verificar: ambos passam

@@ -32,7 +32,15 @@
 - [ ] 4.2 Adicionar o card "Alarme dos especiais" no Perfil (resumo do toque, do tema e da vibração) levando à nova rota `perfil/alarme`. Verificar: navegação no app
 - [ ] 4.3 Criar a tela "Alarme dos especiais" conforme o artboard: prévia ao vivo, 4 aparências, lista de toques com botão de ouvir, "Usar um toque do aparelho", "Vibrar junto", "Volume aumenta aos poucos" e "Testar alarme" (abre a rota de alarme em modo teste, sem dose). Verificar: cada escolha persiste após fechar o app e vale para o próximo alarme
 
-## 5. Validação
+## 5. Alarme por cima de outros apps
 
-- [x] 5.1 Rodar `npx vitest run` e `npx tsc --noEmit`. Verificar: ambos passam
-- [ ] 5.2 Gerar o APK e testar no aparelho os cenários da spec: bloqueado, em uso, modo silencioso, sem permissão de tela cheia, ignorar por 5 min, silenciar, reinício, comum vibrando e personalização. Verificar: checklist anexado ao PR
+- [ ] 5.1 No módulo nativo, `permissoes()` devolve também `sobreOutrosApps` (`Settings.canDrawOverlays`) e `abrirConfigSobreOutrosApps()` abre `ACTION_MANAGE_OVERLAY_PERMISSION`. Verificar: na tela de debug, o estado muda ao ligar a chave nas Configurações
+- [ ] 5.2 No `AlarmeService`, ao tocar, abrir a tela de alarme com `startActivity` quando a permissão estiver concedida e não houver ligação em curso; no Android 15+, antes, adicionar a janela sobreposta transparente e removê-la quando a Activity for exibida ou após 5 s. Verificar: no aparelho (Android 14), com o celular em uso em outro app, o alarme toma a tela; o caminho do 15+ fica registrado como não validado se não houver aparelho
+- [ ] 5.3 Durante ligação ou chamada de vídeo, não abrir por cima e manter o aviso flutuante. Verificar: no aparelho, disparar o alarme durante uma ligação
+- [ ] 5.4 Linha "Alarme por cima de outros apps" no Perfil, com `consultarPermissoes` devolvendo `sobreOutrosApps`. Verificar: negar e conceder nas Configurações e ver a linha mudar ao voltar
+- [ ] 5.5 No primeiro cadastro de um especial, pedir em sequência a tela cheia e a de aparecer sobre outros apps, só as que faltam. Verificar: teste da função pura que decide quais pedir; no aparelho, o cenário "Primeiro medicamento especial"
+
+## 6. Validação
+
+- [x] 6.1 Rodar `npx vitest run` e `npx tsc --noEmit`. Verificar: ambos passam
+- [ ] 6.2 Gerar o APK e testar no aparelho os cenários da spec: bloqueado, em uso (com e sem a permissão de aparecer sobre outros apps), durante ligação, modo silencioso, sem permissão de tela cheia, ignorar por 5 min, silenciar, reinício, comum vibrando e personalização. Verificar: checklist anexado ao PR

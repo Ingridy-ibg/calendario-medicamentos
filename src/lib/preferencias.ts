@@ -67,6 +67,15 @@ function repassarAoAlarme(alarme: PreferenciasAlarme): void {
   configurarAlarme({ toque: toqueParaNativo(alarme.toque), vibrar: alarme.vibrar, crescente: alarme.crescente });
 }
 
+/**
+ * `Appearance.setColorScheme` só existe no app nativo: na renderização
+ * estática da web (Node, no `expo export`) ela não existe e quebraria o
+ * export (fix-revisao-inicio-de-cartela).
+ */
+function aplicarEsquema(aparencia: Aparencia): void {
+  if (typeof Appearance.setColorScheme === 'function') Appearance.setColorScheme(esquemaDaAparencia(aparencia));
+}
+
 export const usePreferencias = create<PreferenciasState>((set, get) => ({
   boasVindasConcluida: !deveExibirBoasVindas(lerItem(CHAVES_PREFERENCIAS.boasVindasConcluida)),
   nome: normalizarNome(lerItem(CHAVES_PREFERENCIAS.nome)),
@@ -93,7 +102,7 @@ export const usePreferencias = create<PreferenciasState>((set, get) => ({
 
   definirAparencia: (aparencia) => {
     Storage.setItemSync(CHAVES_PREFERENCIAS.aparencia, aparencia);
-    Appearance.setColorScheme(esquemaDaAparencia(aparencia));
+    aplicarEsquema(aparencia);
     set({ aparencia });
   },
 
@@ -117,7 +126,7 @@ export function sincronizarPreferenciasDoAlarme(): void {
 
 /** Lida no topo do layout raiz, antes de qualquer tela, para a splash já abrir no tema certo. */
 export function aplicarAparenciaSalva(): void {
-  Appearance.setColorScheme(esquemaDaAparencia(usePreferencias.getState().aparencia));
+  aplicarEsquema(usePreferencias.getState().aparencia);
 }
 
 /** Data da última tela de saudação exibida (add-daily-greeting). */

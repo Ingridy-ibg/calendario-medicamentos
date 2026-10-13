@@ -141,7 +141,28 @@ Os ids ficam em `CANAIS_NOTIFICACAO`.
 
 `consultarPermissoes` passa a usar `permissoes()` do módulo e devolve `alarmeExato` e `telaCheia` reais, sem mais `null`. O pedido de tela cheia do primeiro cadastro de especial continua como está na spec.
 
+### 10. Tela de alarme por cima de outros apps
+
+No teste no aparelho (Android 14) o Android mostrou só o aviso flutuante com o celular em uso. É o comportamento padrão da full-screen intent: ela só abre a tela sozinha com o aparelho bloqueado ou com a tela apagada.
+
+Para tomar a tela também com o celular em uso, o serviço abre a Activity diretamente (`startActivity` com o link do alarme), o que o Android só permite a apps com a permissão `SYSTEM_ALERT_WINDOW` ("Aparecer sobre outros apps"). Ela já está declarada no manifest pelo modelo do Expo.
+
+- **Android 10 a 14:** com `Settings.canDrawOverlays()` verdadeiro, `startActivity` a partir do serviço em primeiro plano é permitido.
+- **Android 15 em diante:** a isenção de abertura em segundo plano por `SYSTEM_ALERT_WINDOW` exige que o app tenha uma janela visível. O serviço adiciona uma janela `TYPE_APPLICATION_OVERLAY` transparente e sem toque (1 × 1 px), abre a Activity e remove a janela quando a Activity é exibida, ou depois de 5 s.
+- **Durante uma ligação ou chamada de vídeo** (`AudioManager.mode` em `MODE_IN_CALL` ou `MODE_IN_COMMUNICATION`), não abre nada por cima: fica o aviso flutuante. Isso não exige permissão de telefone.
+- **Sem a permissão**, ou se a abertura falhar, o aviso flutuante continua como hoje.
+
+`permissoes()` passa a devolver também `sobreOutrosApps`, e `abrirConfigSobreOutrosApps()` abre `Settings.ACTION_MANAGE_OVERLAY_PERMISSION` para o pacote. Não existe diálogo de "Permitir/Negar" para ela.
+
+**Onde se pede** (os mesmos lugares da tela cheia):
+- uma linha "Alarme por cima de outros apps" no Perfil;
+- no primeiro cadastro de um especial, logo depois do pedido de tela cheia, quando a pessoa volta das Configurações, e só se ainda não estiver concedida.
+
+*Alternativa considerada:* desenhar o alarme inteiro como uma janela nativa sobreposta, sem abrir a Activity. Foi descartada porque duplicaria a tela de alarme fora do React Native, como na alternativa da decisão 3.
+
 ## Risks / Trade-offs
+
+- **[Risco] A janela transparente do Android 15+ não ser aceita como "janela visível" em algum fabricante.** → Mitigação: o aviso flutuante continua sempre presente como alternativa. O aparelho de teste é Android 14, então o caminho do 15+ fica marcado como não validado até haver um aparelho com essa versão.
 
 - **[Risco] Android 14+ concede `USE_FULL_SCREEN_INTENT` automaticamente só para apps de alarme/chamada da Play Store.** Em APK instalado por fora, o padrão pode ser negado. → Mitigação: o especial cai para o aviso flutuante com som contínuo (spec), o Perfil mostra o estado e há o pedido no primeiro cadastro de especial.
 - **[Risco] Restrições de serviço em primeiro plano iniciado do fundo (Android 12+).** → Mitigação: iniciar a partir de um alarme `setAlarmClock` é uma isenção documentada. O tipo é `mediaPlayback`, com a permissão correspondente declarada. Tarefa de spike (1.2) valida no aparelho antes do resto.
